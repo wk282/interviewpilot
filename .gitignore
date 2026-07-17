@@ -16,10 +16,11 @@ __pycache__/
 *.pyd
 
 # Runtime and generated files
-logs/
-data/processed/
-data/raw/
-data/uploads/
+backend/logs/
+backend/data/processed/
+backend/data/raw/
+backend/data/uploads/
+backend/.venv/
 
 # Frontend dependencies and build output
 frontend/node_modules/
