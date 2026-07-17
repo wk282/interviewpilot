@@ -1,0 +1,2 @@
+{"case_id":"turn-001","score":90,"next_action":"INCREASE_DIFFICULTY","difficulty_delta":1,"knowledge_gaps":[],"reason":"回答准确说明了召回与重排的关系。","model_name":"replace-with-model-name","prompt_version":"replace-with-prompt-version"}
+{"case_id":"turn-002","score":25,"next_action":"FOLLOW_UP","difficulty_delta":-1,"knowledge_gaps":["召回率与精确率关系","top_k噪声"],"reason":"错误地认为扩大 top_k 会同时提升精确率。","model_name":"replace-with-model-name","prompt_version":"replace-with-prompt-version"}

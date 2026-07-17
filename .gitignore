@@ -21,6 +21,9 @@ backend/data/processed/
 backend/data/raw/
 backend/data/uploads/
 backend/.venv/
+backend/evaluation/reports/*
+!backend/evaluation/reports/.gitkeep
+backend/evaluation/manifests/document_mapping_*.json
 
 # Frontend dependencies and build output
 frontend/node_modules/

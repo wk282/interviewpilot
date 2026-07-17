@@ -1,0 +1,20 @@
+{
+  "corpus_id": "interviewpilot-retrieval-corpus-v1",
+  "version": "1.0.0",
+  "frozen_at": "2026-07-17",
+  "description": "AI application and Agent interview question corpus used by offline retrieval evaluation.",
+  "sources": [
+    {"source_id":"ai-app-a","source_path":"面试题/0.AI应用开发工程师/A.md","fixture_filename":"ai-app-a.md","size_bytes":13647,"sha256":"b8abdfb0586472dde8e43f4bdbf62523ddc8103f16fe547d506514b94ee0cbc6"},
+    {"source_id":"ai-app-b","source_path":"面试题/0.AI应用开发工程师/B.md","fixture_filename":"ai-app-b.md","size_bytes":11156,"sha256":"8787312c675350e966e0735c029e57d16b4d3cc1eba103619e135804877cec0d"},
+    {"source_id":"langchain-a","source_path":"面试题/5.Agent/LangChain/A.md","fixture_filename":"langchain-a.md","size_bytes":12265,"sha256":"d4e2e6b7cc78404c9d87b5f27ce102c0b20ad115e2e00845b315084bf313e2df"},
+    {"source_id":"langchain-b","source_path":"面试题/5.Agent/LangChain/B.md","fixture_filename":"langchain-b.md","size_bytes":9498,"sha256":"dca3fe65538e5edf41f94824f3a2ab4329c01f94b862e5320e38ef3fc4ba14ba"},
+    {"source_id":"langgraph-a","source_path":"面试题/5.Agent/LangGraph/A.md","fixture_filename":"langgraph-a.md","size_bytes":11952,"sha256":"5412c0c1933d354d988344caa48f4d2eb0fa064e4f05d59a86d2da04e72dba41"},
+    {"source_id":"langgraph-b","source_path":"面试题/5.Agent/LangGraph/B.md","fixture_filename":"langgraph-b.md","size_bytes":8961,"sha256":"1b96917b11f103a66ddf1fa3d5f9db0bd46a24e3a233928bd4c3618a7f2fe24a"},
+    {"source_id":"llamaindex-a","source_path":"面试题/5.Agent/Llamaindex/A.md","fixture_filename":"llamaindex-a.md","size_bytes":12735,"sha256":"603e489e5919cb3e4e5d1ea662c2e6f2ad8e4acaa03832c604dd17351468d335"},
+    {"source_id":"llamaindex-b","source_path":"面试题/5.Agent/Llamaindex/B.md","fixture_filename":"llamaindex-b.md","size_bytes":11082,"sha256":"e60bb30ab0a0d3ca2fbb033be002caa995ea32dc5a313dc3f122363f8edd89c0"},
+    {"source_id":"mcp-a","source_path":"面试题/5.Agent/MCP/A.md","fixture_filename":"mcp-a.md","size_bytes":13955,"sha256":"d1057c8147dbc5036c4393ddee2bb380c35e2c602ed4fd7bc1d8fcc4e8c85288"},
+    {"source_id":"mcp-b","source_path":"面试题/5.Agent/MCP/B.md","fixture_filename":"mcp-b.md","size_bytes":10765,"sha256":"ec96753de303e8b954fc065f3f6589f46bcc5c1ce212e1a29f6b9d7b6acb1538"},
+    {"source_id":"multi-agent-a","source_path":"面试题/5.Agent/多Agent/A.md","fixture_filename":"multi-agent-a.md","size_bytes":13950,"sha256":"cbf0b9e3de4ebcea98961abfd3c7e53fe966f2fbcef281f17ad14e40cca6d0bc"},
+    {"source_id":"multi-agent-b","source_path":"面试题/5.Agent/多Agent/B.md","fixture_filename":"multi-agent-b.md","size_bytes":11123,"sha256":"14f6a315a69fb663eab69e09986dd653e560f24ed4be368c80794ff5c5924fa9"}
+  ]
+}

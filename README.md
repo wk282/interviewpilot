@@ -11,6 +11,7 @@ ResearchPilot/
 |  |- app/                        Backend application package
 |  |- alembic/                    Database migrations
 |  |- data/                       Backend datasets and runtime documents
+|  |- evaluation/                 Frozen corpus, annotations, metrics and reports
 |  |- .env.example                Backend configuration template
 |  |- alembic.ini
 |  |- requirements.txt
@@ -55,3 +56,10 @@ The Vite development server proxies `/api` to the backend at
 
 The complete pre-evaluation product version is preserved by Git tag
 `baseline-v1`. See `docs/BASELINE_V1.md` for its scope and restoration notes.
+
+## Offline Evaluation
+
+The `develop` branch adds a versioned retrieval and Critic regression framework.
+It compares eight retrieval profiles, CRAG local/web routing, latency, and
+interview decision quality against frozen datasets. See
+`backend/evaluation/README.md` for the manual preparation and evaluation commands.

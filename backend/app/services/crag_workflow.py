@@ -1,6 +1,7 @@
 import asyncio
 import json
 from dataclasses import dataclass
+from collections.abc import Awaitable, Callable
 from typing import Any, Literal, TypedDict
 from urllib.parse import urlparse
 
@@ -66,30 +67,54 @@ def parse_json_content(content: str) -> dict:
 class CRAGWorkflow:
     def __init__(
         self,
-        session: AsyncSession,
-        interview: InterviewSession,
-        position: JobPosition,
-        candidate: CandidateProfile,
-        user: AppUser,
+        session: AsyncSession | None,
+        interview: InterviewSession | None,
+        position: JobPosition | None,
+        candidate: CandidateProfile | None,
+        user: AppUser | None,
+        *,
+        retrieval_provider: Callable[[str], Awaitable[list[dict]]] | None = None,
+        web_enabled_override: bool | None = None,
     ) -> None:
         self.session = session
         self.interview = interview
         self.position = position
         self.candidate = candidate
         self.user = user
+        self.retrieval_provider = retrieval_provider
         self.max_rewrites = settings.CRAG_MAX_REWRITES
         self.max_web_searches = settings.CRAG_MAX_WEB_SEARCHES
-        self.web_enabled = settings.CRAG_WEB_SEARCH_ENABLED and bool(settings.TAVILY_API_KEY)
+        configured_web_enabled = settings.CRAG_WEB_SEARCH_ENABLED and bool(
+            settings.TAVILY_API_KEY
+        )
+        self.web_enabled = (
+            configured_web_enabled
+            if web_enabled_override is None
+            else web_enabled_override and bool(settings.TAVILY_API_KEY)
+        )
 
     async def retrieve(self, state: CRAGState) -> dict:
-        evidence = await collect_evidence(
-            self.session,
-            self.interview,
-            self.position,
-            self.candidate,
-            self.user,
-            retrieval_query=state["query"],
-        )
+        if self.retrieval_provider is not None:
+            evidence = await self.retrieval_provider(state["query"])
+        else:
+            if not all(
+                (
+                    self.session,
+                    self.interview,
+                    self.position,
+                    self.candidate,
+                    self.user,
+                )
+            ):
+                raise RuntimeError("CRAG interview retrieval context is incomplete")
+            evidence = await collect_evidence(
+                self.session,
+                self.interview,
+                self.position,
+                self.candidate,
+                self.user,
+                retrieval_query=state["query"],
+            )
         local_evidence = [{**item, "source_type": "LOCAL"} for item in evidence]
         trace = [
             *state["trace"],
