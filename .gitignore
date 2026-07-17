@@ -1,0 +1,33 @@
+# Avoid committing sensitive environment variables
+.env
+.env.local
+.env.*.local
+
+# Avoid committing local editor settings
+.vscode/
+
+# Avoid committing local Pyrefly linter configuration
+pyrefly.toml
+
+# Python compilation files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Runtime and generated files
+logs/
+data/processed/
+data/raw/
+data/uploads/
+
+# Frontend dependencies and build output
+frontend/node_modules/
+frontend/dist/
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# Personal resume is not part of the application source baseline
+Agent CRAG.docx
