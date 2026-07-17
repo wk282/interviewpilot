@@ -54,8 +54,9 @@ Retrieval defaults:
 - CRAG maximum rewrites: `1`
 - CRAG maximum web searches: `1`
 
-Model configuration is represented without credentials in `.env.example`.
-The real `.env` is intentionally excluded from Git.
+Model configuration is represented without credentials in
+`backend/.env.example`. The real `backend/.env` is intentionally excluded from
+Git.
 
 ## Runtime Components
 
@@ -65,9 +66,10 @@ The real `.env` is intentionally excluded from Git.
 - Redis/Celery: `6379`
 - OpenSearch: `9200`
 
-Backend packages are pinned in `requirements.txt`. Frontend packages are locked
-by `frontend/package-lock.json`. Database schema history is preserved in
-`alembic/versions` through migration `0013_interview_decisions`.
+Backend packages are pinned in `backend/requirements.txt`. Frontend packages
+are locked by `frontend/package-lock.json`. Database schema history is
+preserved in `backend/alembic/versions` through migration
+`0013_interview_decisions`.
 
 ## Data Snapshot Boundary
 
@@ -78,7 +80,7 @@ safe configuration templates. It does not contain:
 - PostgreSQL records
 - Redis task state
 - OpenSearch index data
-- `data/uploads` documents
+- `backend/data/uploads` documents
 - logs or frontend build output
 
 PostgreSQL and uploaded documents must be backed up separately if the current
@@ -93,8 +95,9 @@ docker exec interviewpilot-postgres pg_dump -U interviewpilot -d interviewpilot 
 docker cp interviewpilot-postgres:/tmp/baseline-v1.dump .\backups\baseline-v1.dump
 ```
 
-Copy `data/uploads` to the same backup location if uploaded documents must be
-preserved. Keep that backup outside Git because it can contain personal data.
+Copy `backend/data/uploads` to the same backup location if uploaded documents
+must be preserved. Keep that backup outside Git because it can contain personal
+data.
 
 ## Known Limitations
 
