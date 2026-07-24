@@ -1,4 +1,4 @@
-import type { DocumentItem } from '../types/document'
+import type { DocumentItem, DocumentParsedContent } from '../types/document'
 import { apiClient } from './client'
 
 function documentsPath(workspaceId: string, knowledgeBaseId: string) {
@@ -19,6 +19,17 @@ export async function uploadDocument(workspaceId: string, knowledgeBaseId: strin
 
 export async function deleteDocument(workspaceId: string, knowledgeBaseId: string, documentId: string) {
   await apiClient.delete(`${documentsPath(workspaceId, knowledgeBaseId)}/${documentId}`)
+}
+
+export async function getDocumentParsedContent(
+  workspaceId: string,
+  knowledgeBaseId: string,
+  documentId: string,
+) {
+  const response = await apiClient.get<DocumentParsedContent>(
+    `${documentsPath(workspaceId, knowledgeBaseId)}/${documentId}/parsed-content`,
+  )
+  return response.data
 }
 
 export async function resumeDocumentProcessing(workspaceId: string, knowledgeBaseId: string, documentId: string) {

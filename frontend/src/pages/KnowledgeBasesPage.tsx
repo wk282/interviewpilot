@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
-import { BookOutlined, DeleteOutlined, EditOutlined, FileTextOutlined, PlusOutlined } from '@ant-design/icons'
+import { BookOutlined, DeleteOutlined, EditOutlined, FileTextOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons'
 import { Button, Empty, Form, Input, Modal, Select, Tag, Typography, message } from 'antd'
 import { useNavigate } from 'react-router-dom'
-import { createKnowledgeBase, deleteKnowledgeBase, getKnowledgeBases, renameKnowledgeBase } from '../api/knowledgeBases'
+import { createKnowledgeBase, deleteKnowledgeBase, getKnowledgeBases, updateKnowledgeBase } from '../api/knowledgeBases'
 import AppHeader from '../components/AppHeader'
 import CandidateSidebar from '../components/CandidateSidebar'
 import EnterpriseSidebar from '../components/EnterpriseSidebar'
-import type { KnowledgeBase, KnowledgeBaseCreateRequest, KnowledgeBasePurpose, KnowledgeBaseRenameRequest } from '../types/knowledgeBase'
+import type { KnowledgeBase, KnowledgeBaseCreateRequest, KnowledgeBasePurpose, KnowledgeBaseUpdateRequest } from '../types/knowledgeBase'
 import { getApiErrorMessage } from '../utils/apiError'
 import { getActiveWorkspace } from '../utils/workspaceStorage'
 
@@ -28,13 +28,14 @@ function KnowledgeBasesPage() {
   const personal = workspace?.type === 'PERSONAL'
   const canManage = personal || workspace?.role === 'OWNER' || workspace?.role === 'ADMIN'
   const [form] = Form.useForm<KnowledgeBaseCreateRequest>()
-  const [renameForm] = Form.useForm<KnowledgeBaseRenameRequest>()
+  const [editForm] = Form.useForm<KnowledgeBaseUpdateRequest>()
   const [items, setItems] = useState<KnowledgeBase[]>([])
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
-  const [renaming, setRenaming] = useState(false)
+  const [updating, setUpdating] = useState(false)
   const [editingItem, setEditingItem] = useState<KnowledgeBase | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
 
   const loadItems = () => {
     if (!workspace) return
@@ -83,27 +84,36 @@ function KnowledgeBasesPage() {
     })
   }
 
-  const openRename = (item: KnowledgeBase) => {
+  const openEditor = (item: KnowledgeBase) => {
     setEditingItem(item)
   }
 
-  const submitRename = async (values: KnowledgeBaseRenameRequest) => {
+  const submitUpdate = async (values: KnowledgeBaseUpdateRequest) => {
     if (!workspace || !editingItem) return
-    setRenaming(true)
+    setUpdating(true)
     try {
-      await renameKnowledgeBase(workspace.id, editingItem.id, values)
-      message.success('知识库名称已更新')
+      await updateKnowledgeBase(workspace.id, editingItem.id, values)
+      message.success('知识库已更新')
       setEditingItem(null)
-      renameForm.resetFields()
+      editForm.resetFields()
       loadItems()
     } catch (error) {
-      message.error(getApiErrorMessage(error, '知识库改名失败'))
+      message.error(getApiErrorMessage(error, '知识库更新失败'))
     } finally {
-      setRenaming(false)
+      setUpdating(false)
     }
   }
 
   const purposes = personal ? personalPurposes : enterprisePurposes
+  const editablePurposes = editingItem?.purpose === 'RESUME'
+    ? ['RESUME'] as const
+    : purposes.filter((purpose) => purpose !== 'RESUME')
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase()
+  const filteredItems = items.filter((item) => (
+    !normalizedSearchQuery
+    || [item.name, item.purpose, purposeLabels[item.purpose], item.visibility]
+      .some((value) => value?.toLowerCase().includes(normalizedSearchQuery))
+  ))
 
   return (
     <main className="dashboard-page">
@@ -125,8 +135,12 @@ function KnowledgeBasesPage() {
           ) : items.length === 0 ? (
             <section className="content-panel"><Empty description="暂无知识库" /></section>
           ) : (
-            <div className="knowledge-grid">
-              {items.map((item) => (
+            <>
+              <div className="list-toolbar">
+                <Input allowClear prefix={<SearchOutlined />} value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="搜索知识库名称或分类" className="list-search" />
+              </div>
+              {filteredItems.length === 0 ? <section className="content-panel"><Empty description="没有匹配的知识库" /></section> : <div className="knowledge-grid">
+              {filteredItems.map((item) => (
                 <article
                   className="knowledge-item"
                   key={item.id}
@@ -141,13 +155,14 @@ function KnowledgeBasesPage() {
                   <div className="knowledge-item-footer">
                     <span>{new Date(item.created_at).toLocaleDateString('zh-CN')}</span>
                     {canManage && <div className="knowledge-item-actions">
-                      <Button type="text" icon={<EditOutlined />} onClick={(event) => { event.stopPropagation(); openRename(item) }} aria-label="知识库改名" />
+                      <Button type="text" icon={<EditOutlined />} onClick={(event) => { event.stopPropagation(); openEditor(item) }} aria-label="编辑知识库" />
                       <Button type="text" danger icon={<DeleteOutlined />} onClick={(event) => { event.stopPropagation(); remove(item) }} aria-label="删除知识库" />
                     </div>}
                   </div>
                 </article>
               ))}
-            </div>
+              </div>}
+            </>
           )}
         </section>
       </div>
@@ -171,18 +186,38 @@ function KnowledgeBasesPage() {
       </Modal>
 
       <Modal
-        title="知识库改名"
+        title="编辑知识库"
         open={editingItem !== null}
         onCancel={() => setEditingItem(null)}
-        afterOpenChange={(open) => { if (open && editingItem) renameForm.setFieldsValue({ name: editingItem.name }) }}
+        afterOpenChange={(open) => {
+          if (open && editingItem) {
+            editForm.setFieldsValue({
+              name: editingItem.name,
+              purpose: editingItem.purpose,
+              visibility: editingItem.visibility,
+            })
+          }
+        }}
         footer={null}
         destroyOnHidden
       >
-        <Form<KnowledgeBaseRenameRequest> form={renameForm} layout="vertical" onFinish={submitRename} requiredMark={false}>
+        <Form<KnowledgeBaseUpdateRequest> form={editForm} layout="vertical" onFinish={submitUpdate} requiredMark={false}>
           <Form.Item label="名称" name="name" rules={[{ required: true, whitespace: true, message: '请输入知识库名称' }]}>
             <Input maxLength={255} autoFocus />
           </Form.Item>
-          <Button type="primary" htmlType="submit" block loading={renaming}>保存</Button>
+          <Form.Item label="分类" name="purpose" rules={[{ required: true, message: '请选择知识库分类' }]}>
+            <Select
+              disabled={editingItem?.purpose === 'RESUME'}
+              options={editablePurposes.map((purpose) => ({ value: purpose, label: purposeLabels[purpose] }))}
+            />
+          </Form.Item>
+          <Form.Item label="可见范围" name="visibility" rules={[{ required: true, message: '请选择可见范围' }]}>
+            <Select options={personal
+              ? [{ value: 'PRIVATE', label: '私有' }]
+              : [{ value: 'WORKSPACE', label: '企业成员可见' }, { value: 'PRIVATE', label: '仅创建者和管理员可见' }]}
+            />
+          </Form.Item>
+          <Button type="primary" htmlType="submit" block loading={updating}>保存</Button>
         </Form>
       </Modal>
     </main>

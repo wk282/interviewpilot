@@ -1,0 +1,1559 @@
+{
+  "metadata": {
+    "source_file": "scanned-resume.pdf",
+    "parser": "PYMUPDF_PAGE_ROUTER",
+    "parser_version": "0.1.0-experiment",
+    "page_count": 1,
+    "ocr_backend": "PADDLE_OCR_2X",
+    "selective_ocr": true
+  },
+  "blocks": [
+    {
+      "block_type": "paragraph",
+      "text": "个人简历",
+      "bbox": [
+        99.0,
+        57.0,
+        342.0,
+        125.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9957784414291382,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "AI应用开工程师",
+      "bbox": [
+        364.0,
+        60.0,
+        543.0,
+        87.0
+      ],
+      "source": "OCR",
+      "confidence": 0.8690826892852783,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "LLM",
+      "bbox": [
+        364.0,
+        90.0,
+        418.0,
+        118.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9929479956626892,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "Application",
+      "bbox": [
+        546.0,
+        90.0,
+        723.0,
+        123.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9929746985435486,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "基本信息",
+      "bbox": [
+        86.0,
+        166.0,
+        173.0,
+        194.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9960820078849792,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "姓",
+      "bbox": [
+        105.0,
+        228.0,
+        128.0,
+        251.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9995695948600769,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "名：玉凯",
+      "bbox": [
+        165.0,
+        225.0,
+        267.0,
+        256.0
+      ],
+      "source": "OCR",
+      "confidence": 0.971562385559082,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "求职方向：AI应用开发",
+      "bbox": [
+        471.0,
+        223.0,
+        706.0,
+        251.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9735082983970642,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "性",
+      "bbox": [
+        105.0,
+        256.0,
+        128.0,
+        279.0
+      ],
+      "source": "OCR",
+      "confidence": 0.999674916267395,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "别：男",
+      "bbox": [
+        167.0,
+        254.0,
+        247.0,
+        282.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9184994697570801,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "最高学历：硕士在读",
+      "bbox": [
+        471.0,
+        251.0,
+        673.0,
+        278.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9016488194465637,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "电",
+      "bbox": [
+        106.0,
+        284.0,
+        128.0,
+        306.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9971490502357483,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "话：18231869309",
+      "bbox": [
+        167.0,
+        281.0,
+        347.0,
+        307.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9943991899490356,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "邮",
+      "bbox": [
+        469.0,
+        278.0,
+        498.0,
+        305.0
+      ],
+      "source": "OCR",
+      "confidence": 0.8341578245162964,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "箱：wangkkai3698sina.com",
+      "bbox": [
+        531.0,
+        281.0,
+        802.0,
+        307.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9513566493988037,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "教育背景",
+      "bbox": [
+        86.0,
+        368.0,
+        176.0,
+        394.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9092746376991272,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "2020.09-2024.06",
+      "bbox": [
+        108.0,
+        405.0,
+        276.0,
+        431.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9882650375366211,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "石家庄铁道大学",
+      "bbox": [
+        475.0,
+        405.0,
+        621.0,
+        431.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9608950614929199,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "计算机科学与技术（本科）",
+      "bbox": [
+        732.0,
+        405.0,
+        994.0,
+        431.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9782453179359436,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "主修课程：算法与数据结构、数据库原理、计算机操作系统、软件工程、计算机网络、计算机体",
+      "bbox": [
+        108.0,
+        434.0,
+        980.0,
+        461.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9537632465362549,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "系结构等",
+      "bbox": [
+        111.0,
+        462.0,
+        208.0,
+        484.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9263269901275635,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "专业成绩：前3%",
+      "bbox": [
+        108.0,
+        487.0,
+        278.0,
+        513.0
+      ],
+      "source": "OCR",
+      "confidence": 0.942018985748291,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "2024.09-2027.06",
+      "bbox": [
+        108.0,
+        544.0,
+        275.0,
+        566.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9834854006767273,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "计算机技术（硕士）",
+      "bbox": [
+        796.0,
+        544.0,
+        993.0,
+        566.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9498611092567444,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "主修课程：高级算法设计与分析、机器学习、数据分析、人工智能、数理方程与积分变换、应用",
+      "bbox": [
+        108.0,
+        569.0,
+        980.0,
+        596.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9615802764892578,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "数理统计等",
+      "bbox": [
+        108.0,
+        597.0,
+        229.0,
+        624.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9951180219650269,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "科研成果",
+      "bbox": [
+        84.0,
+        658.0,
+        180.0,
+        686.0
+      ],
+      "source": "OCR",
+      "confidence": 0.8586992621421814,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "国家发明专利：",
+      "bbox": [
+        108.0,
+        704.0,
+        275.0,
+        731.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9521418213844299,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "搜权发明专利2项、公开2项，研究方向涵盖无人机航拍目标检测与视频摘要.",
+      "bbox": [
+        139.0,
+        732.0,
+        901.0,
+        758.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9288356304168701,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "发表论文：",
+      "bbox": [
+        107.0,
+        785.0,
+        233.0,
+        813.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9340218305587769,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "High-Frequency Detail Compensation and Multi-Scale Feature Fusion Net for UAV Remote Sensing",
+      "bbox": [
+        133.0,
+        810.0,
+        987.0,
+        842.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9643913507461548,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "ObjectDetection.（ICASSP2026)CCF-B",
+      "bbox": [
+        105.0,
+        838.0,
+        492.0,
+        864.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9605085253715515,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "项目经历",
+      "bbox": [
+        87.0,
+        876.0,
+        180.0,
+        898.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9971957206726074,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "基于AEenticCRAG的双端智能技术面试平合",
+      "bbox": [
+        108.0,
+        918.0,
+        535.0,
+        945.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9435005187988281,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "A1应用开发",
+      "bbox": [
+        855.0,
+        920.0,
+        987.0,
+        941.0
+      ],
+      "source": "OCR",
+      "confidence": 0.7059829831123352,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "技术機：Python、FastAPl、LangGraph、PostgreSQL/pgvector、OpenSearch、Celery/Redis、",
+      "bbox": [
+        108.0,
+        946.0,
+        971.0,
+        973.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9500887989997864,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "React/TypeScript、智语Embedding/Reranker、DeepSeek",
+      "bbox": [
+        106.0,
+        976.0,
+        660.0,
+        997.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9575443863868713,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "项目介绍：",
+      "bbox": [
+        108.0,
+        1004.0,
+        234.0,
+        1025.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9893171191215515,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "面向企业招聘与个人模拟面试，国绕“简历/JD/知识库入库一面试规划一动态问答一证括化",
+      "bbox": [
+        145.0,
+        1027.0,
+        977.0,
+        1053.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9424298405647278,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "评估一录用决策”构建双端业务闭环，支持岗位投递、企业邀请、站内消息和评估报告，",
+      "bbox": [
+        109.0,
+        1058.0,
+        929.0,
+        1080.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9565420150756836,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "核心职责：",
+      "bbox": [
+        106.0,
+        1081.0,
+        234.0,
+        1107.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9521511197090149,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "·知识库入库与混合检京：实现PDF/Word/Markdown解析、父子分块、Embedding与BM25",
+      "bbox": [
+        150.0,
+        1107.0,
+        979.0,
+        1135.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9485499262809753,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "异步入库，使用Celery记录分阶段状态并支持失败重试：基于DEvector向量、PostEreSOL",
+      "bbox": [
+        108.0,
+        1137.0,
+        979.0,
+        1163.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9432283043861389,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "Trigram、0penSearchBM25加权融合，经智谱Reranker 全局重排，并回溯父块补全上下文.",
+      "bbox": [
+        103.0,
+        1163.0,
+        993.0,
+        1191.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9202061295509338,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "·AgenticCRAG自纠错与可观测路由：使用LangGraph建模CRAGState，显式缆护询、",
+      "bbox": [
+        151.0,
+        1193.0,
+        976.0,
+        1214.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9200641512870789,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "证据、判级、缺失项、改写/网页检索次数及执行轨迹：接“检索一证据判级一意询政写/Web",
+      "bbox": [
+        108.0,
+        1219.0,
+        977.0,
+        1245.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9062767624855042,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "Search一生成”条件路由，仅在本地证括不足时调用Tavily，并为模型或外部服务异常提供本",
+      "bbox": [
+        105.0,
+        1245.0,
+        980.0,
+        1272.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9689602255821228,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "地规则降级.",
+      "bbox": [
+        108.0,
+        1275.0,
+        248.0,
+        1297.0
+      ],
+      "source": "OCR",
+      "confidence": 0.8961501717567444,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "这问，结来后异步生成引用原回答与检索证据的多维评估报告：基于FastAPl、PostgreSQL、",
+      "bbox": [
+        106.0,
+        1326.0,
+        965.0,
+        1354.0
+      ],
+      "source": "OCR",
+      "confidence": 0.8859319090843201,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "Redis奕现JWT/RBAC、企业/个人工作空间、简历投递快服、企业逐请、站内消息与录用决策闭",
+      "bbox": [
+        106.0,
+        1356.0,
+        974.0,
+        1377.0
+      ],
+      "source": "OCR",
+      "confidence": 0.9480544924736023,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    },
+    {
+      "block_type": "paragraph",
+      "text": "环",
+      "bbox": [
+        106.0,
+        1382.0,
+        165.0,
+        1404.0
+      ],
+      "source": "OCR",
+      "confidence": 0.8843774199485779,
+      "metadata": {
+        "coordinate_space": "rendered_pixels"
+      }
+    }
+  ],
+  "plain_text": "个人简历\n\nAI应用开工程师\n\nLLM\n\nApplication\n\n基本信息\n\n姓\n\n名：玉凯\n\n求职方向：AI应用开发\n\n性\n\n别：男\n\n最高学历：硕士在读\n\n电\n\n话：18231869309\n\n邮\n\n箱：wangkkai3698sina.com\n\n教育背景\n\n2020.09-2024.06\n\n石家庄铁道大学\n\n计算机科学与技术（本科）\n\n主修课程：算法与数据结构、数据库原理、计算机操作系统、软件工程、计算机网络、计算机体\n\n系结构等\n\n专业成绩：前3%\n\n2024.09-2027.06\n\n计算机技术（硕士）\n\n主修课程：高级算法设计与分析、机器学习、数据分析、人工智能、数理方程与积分变换、应用\n\n数理统计等\n\n科研成果\n\n国家发明专利：\n\n搜权发明专利2项、公开2项，研究方向涵盖无人机航拍目标检测与视频摘要.\n\n发表论文：\n\nHigh-Frequency Detail Compensation and Multi-Scale Feature Fusion Net for UAV Remote Sensing\n\nObjectDetection.（ICASSP2026)CCF-B\n\n项目经历\n\n基于AEenticCRAG的双端智能技术面试平合\n\nA1应用开发\n\n技术機：Python、FastAPl、LangGraph、PostgreSQL/pgvector、OpenSearch、Celery/Redis、\n\nReact/TypeScript、智语Embedding/Reranker、DeepSeek\n\n项目介绍：\n\n面向企业招聘与个人模拟面试，国绕“简历/JD/知识库入库一面试规划一动态问答一证括化\n\n评估一录用决策”构建双端业务闭环，支持岗位投递、企业邀请、站内消息和评估报告，\n\n核心职责：\n\n·知识库入库与混合检京：实现PDF/Word/Markdown解析、父子分块、Embedding与BM25\n\n异步入库，使用Celery记录分阶段状态并支持失败重试：基于DEvector向量、PostEreSOL\n\nTrigram、0penSearchBM25加权融合，经智谱Reranker 全局重排，并回溯父块补全上下文.\n\n·AgenticCRAG自纠错与可观测路由：使用LangGraph建模CRAGState，显式缆护询、\n\n证据、判级、缺失项、改写/网页检索次数及执行轨迹：接“检索一证据判级一意询政写/Web\n\nSearch一生成”条件路由，仅在本地证括不足时调用Tavily，并为模型或外部服务异常提供本\n\n地规则降级.\n\n这问，结来后异步生成引用原回答与检索证据的多维评估报告：基于FastAPl、PostgreSQL、\n\nRedis奕现JWT/RBAC、企业/个人工作空间、简历投递快服、企业逐请、站内消息与录用决策闭\n\n环",
+  "pages": [
+    {
+      "page_number": 1,
+      "kind": "SCANNED",
+      "blocks": [
+        {
+          "block_type": "paragraph",
+          "text": "个人简历",
+          "bbox": [
+            99.0,
+            57.0,
+            342.0,
+            125.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9957784414291382,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "AI应用开工程师",
+          "bbox": [
+            364.0,
+            60.0,
+            543.0,
+            87.0
+          ],
+          "source": "OCR",
+          "confidence": 0.8690826892852783,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "LLM",
+          "bbox": [
+            364.0,
+            90.0,
+            418.0,
+            118.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9929479956626892,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "Application",
+          "bbox": [
+            546.0,
+            90.0,
+            723.0,
+            123.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9929746985435486,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "基本信息",
+          "bbox": [
+            86.0,
+            166.0,
+            173.0,
+            194.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9960820078849792,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "姓",
+          "bbox": [
+            105.0,
+            228.0,
+            128.0,
+            251.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9995695948600769,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "名：玉凯",
+          "bbox": [
+            165.0,
+            225.0,
+            267.0,
+            256.0
+          ],
+          "source": "OCR",
+          "confidence": 0.971562385559082,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "求职方向：AI应用开发",
+          "bbox": [
+            471.0,
+            223.0,
+            706.0,
+            251.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9735082983970642,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "性",
+          "bbox": [
+            105.0,
+            256.0,
+            128.0,
+            279.0
+          ],
+          "source": "OCR",
+          "confidence": 0.999674916267395,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "别：男",
+          "bbox": [
+            167.0,
+            254.0,
+            247.0,
+            282.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9184994697570801,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "最高学历：硕士在读",
+          "bbox": [
+            471.0,
+            251.0,
+            673.0,
+            278.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9016488194465637,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "电",
+          "bbox": [
+            106.0,
+            284.0,
+            128.0,
+            306.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9971490502357483,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "话：18231869309",
+          "bbox": [
+            167.0,
+            281.0,
+            347.0,
+            307.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9943991899490356,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "邮",
+          "bbox": [
+            469.0,
+            278.0,
+            498.0,
+            305.0
+          ],
+          "source": "OCR",
+          "confidence": 0.8341578245162964,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "箱：wangkkai3698sina.com",
+          "bbox": [
+            531.0,
+            281.0,
+            802.0,
+            307.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9513566493988037,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "教育背景",
+          "bbox": [
+            86.0,
+            368.0,
+            176.0,
+            394.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9092746376991272,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "2020.09-2024.06",
+          "bbox": [
+            108.0,
+            405.0,
+            276.0,
+            431.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9882650375366211,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "石家庄铁道大学",
+          "bbox": [
+            475.0,
+            405.0,
+            621.0,
+            431.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9608950614929199,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "计算机科学与技术（本科）",
+          "bbox": [
+            732.0,
+            405.0,
+            994.0,
+            431.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9782453179359436,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "主修课程：算法与数据结构、数据库原理、计算机操作系统、软件工程、计算机网络、计算机体",
+          "bbox": [
+            108.0,
+            434.0,
+            980.0,
+            461.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9537632465362549,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "系结构等",
+          "bbox": [
+            111.0,
+            462.0,
+            208.0,
+            484.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9263269901275635,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "专业成绩：前3%",
+          "bbox": [
+            108.0,
+            487.0,
+            278.0,
+            513.0
+          ],
+          "source": "OCR",
+          "confidence": 0.942018985748291,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "2024.09-2027.06",
+          "bbox": [
+            108.0,
+            544.0,
+            275.0,
+            566.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9834854006767273,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "计算机技术（硕士）",
+          "bbox": [
+            796.0,
+            544.0,
+            993.0,
+            566.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9498611092567444,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "主修课程：高级算法设计与分析、机器学习、数据分析、人工智能、数理方程与积分变换、应用",
+          "bbox": [
+            108.0,
+            569.0,
+            980.0,
+            596.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9615802764892578,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "数理统计等",
+          "bbox": [
+            108.0,
+            597.0,
+            229.0,
+            624.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9951180219650269,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "科研成果",
+          "bbox": [
+            84.0,
+            658.0,
+            180.0,
+            686.0
+          ],
+          "source": "OCR",
+          "confidence": 0.8586992621421814,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "国家发明专利：",
+          "bbox": [
+            108.0,
+            704.0,
+            275.0,
+            731.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9521418213844299,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "搜权发明专利2项、公开2项，研究方向涵盖无人机航拍目标检测与视频摘要.",
+          "bbox": [
+            139.0,
+            732.0,
+            901.0,
+            758.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9288356304168701,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "发表论文：",
+          "bbox": [
+            107.0,
+            785.0,
+            233.0,
+            813.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9340218305587769,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "High-Frequency Detail Compensation and Multi-Scale Feature Fusion Net for UAV Remote Sensing",
+          "bbox": [
+            133.0,
+            810.0,
+            987.0,
+            842.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9643913507461548,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "ObjectDetection.（ICASSP2026)CCF-B",
+          "bbox": [
+            105.0,
+            838.0,
+            492.0,
+            864.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9605085253715515,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "项目经历",
+          "bbox": [
+            87.0,
+            876.0,
+            180.0,
+            898.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9971957206726074,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "基于AEenticCRAG的双端智能技术面试平合",
+          "bbox": [
+            108.0,
+            918.0,
+            535.0,
+            945.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9435005187988281,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "A1应用开发",
+          "bbox": [
+            855.0,
+            920.0,
+            987.0,
+            941.0
+          ],
+          "source": "OCR",
+          "confidence": 0.7059829831123352,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "技术機：Python、FastAPl、LangGraph、PostgreSQL/pgvector、OpenSearch、Celery/Redis、",
+          "bbox": [
+            108.0,
+            946.0,
+            971.0,
+            973.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9500887989997864,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "React/TypeScript、智语Embedding/Reranker、DeepSeek",
+          "bbox": [
+            106.0,
+            976.0,
+            660.0,
+            997.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9575443863868713,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "项目介绍：",
+          "bbox": [
+            108.0,
+            1004.0,
+            234.0,
+            1025.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9893171191215515,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "面向企业招聘与个人模拟面试，国绕“简历/JD/知识库入库一面试规划一动态问答一证括化",
+          "bbox": [
+            145.0,
+            1027.0,
+            977.0,
+            1053.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9424298405647278,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "评估一录用决策”构建双端业务闭环，支持岗位投递、企业邀请、站内消息和评估报告，",
+          "bbox": [
+            109.0,
+            1058.0,
+            929.0,
+            1080.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9565420150756836,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "核心职责：",
+          "bbox": [
+            106.0,
+            1081.0,
+            234.0,
+            1107.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9521511197090149,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "·知识库入库与混合检京：实现PDF/Word/Markdown解析、父子分块、Embedding与BM25",
+          "bbox": [
+            150.0,
+            1107.0,
+            979.0,
+            1135.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9485499262809753,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "异步入库，使用Celery记录分阶段状态并支持失败重试：基于DEvector向量、PostEreSOL",
+          "bbox": [
+            108.0,
+            1137.0,
+            979.0,
+            1163.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9432283043861389,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "Trigram、0penSearchBM25加权融合，经智谱Reranker 全局重排，并回溯父块补全上下文.",
+          "bbox": [
+            103.0,
+            1163.0,
+            993.0,
+            1191.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9202061295509338,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "·AgenticCRAG自纠错与可观测路由：使用LangGraph建模CRAGState，显式缆护询、",
+          "bbox": [
+            151.0,
+            1193.0,
+            976.0,
+            1214.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9200641512870789,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "证据、判级、缺失项、改写/网页检索次数及执行轨迹：接“检索一证据判级一意询政写/Web",
+          "bbox": [
+            108.0,
+            1219.0,
+            977.0,
+            1245.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9062767624855042,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "Search一生成”条件路由，仅在本地证括不足时调用Tavily，并为模型或外部服务异常提供本",
+          "bbox": [
+            105.0,
+            1245.0,
+            980.0,
+            1272.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9689602255821228,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "地规则降级.",
+          "bbox": [
+            108.0,
+            1275.0,
+            248.0,
+            1297.0
+          ],
+          "source": "OCR",
+          "confidence": 0.8961501717567444,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "这问，结来后异步生成引用原回答与检索证据的多维评估报告：基于FastAPl、PostgreSQL、",
+          "bbox": [
+            106.0,
+            1326.0,
+            965.0,
+            1354.0
+          ],
+          "source": "OCR",
+          "confidence": 0.8859319090843201,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "Redis奕现JWT/RBAC、企业/个人工作空间、简历投递快服、企业逐请、站内消息与录用决策闭",
+          "bbox": [
+            106.0,
+            1356.0,
+            974.0,
+            1377.0
+          ],
+          "source": "OCR",
+          "confidence": 0.9480544924736023,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        },
+        {
+          "block_type": "paragraph",
+          "text": "环",
+          "bbox": [
+            106.0,
+            1382.0,
+            165.0,
+            1404.0
+          ],
+          "source": "OCR",
+          "confidence": 0.8843774199485779,
+          "metadata": {
+            "coordinate_space": "rendered_pixels"
+          }
+        }
+      ],
+      "plain_text": "个人简历\n\nAI应用开工程师\n\nLLM\n\nApplication\n\n基本信息\n\n姓\n\n名：玉凯\n\n求职方向：AI应用开发\n\n性\n\n别：男\n\n最高学历：硕士在读\n\n电\n\n话：18231869309\n\n邮\n\n箱：wangkkai3698sina.com\n\n教育背景\n\n2020.09-2024.06\n\n石家庄铁道大学\n\n计算机科学与技术（本科）\n\n主修课程：算法与数据结构、数据库原理、计算机操作系统、软件工程、计算机网络、计算机体\n\n系结构等\n\n专业成绩：前3%\n\n2024.09-2027.06\n\n计算机技术（硕士）\n\n主修课程：高级算法设计与分析、机器学习、数据分析、人工智能、数理方程与积分变换、应用\n\n数理统计等\n\n科研成果\n\n国家发明专利：\n\n搜权发明专利2项、公开2项，研究方向涵盖无人机航拍目标检测与视频摘要.\n\n发表论文：\n\nHigh-Frequency Detail Compensation and Multi-Scale Feature Fusion Net for UAV Remote Sensing\n\nObjectDetection.（ICASSP2026)CCF-B\n\n项目经历\n\n基于AEenticCRAG的双端智能技术面试平合\n\nA1应用开发\n\n技术機：Python、FastAPl、LangGraph、PostgreSQL/pgvector、OpenSearch、Celery/Redis、\n\nReact/TypeScript、智语Embedding/Reranker、DeepSeek\n\n项目介绍：\n\n面向企业招聘与个人模拟面试，国绕“简历/JD/知识库入库一面试规划一动态问答一证括化\n\n评估一录用决策”构建双端业务闭环，支持岗位投递、企业邀请、站内消息和评估报告，\n\n核心职责：\n\n·知识库入库与混合检京：实现PDF/Word/Markdown解析、父子分块、Embedding与BM25\n\n异步入库，使用Celery记录分阶段状态并支持失败重试：基于DEvector向量、PostEreSOL\n\nTrigram、0penSearchBM25加权融合，经智谱Reranker 全局重排，并回溯父块补全上下文.\n\n·AgenticCRAG自纠错与可观测路由：使用LangGraph建模CRAGState，显式缆护询、\n\n证据、判级、缺失项、改写/网页检索次数及执行轨迹：接“检索一证据判级一意询政写/Web\n\nSearch一生成”条件路由，仅在本地证括不足时调用Tavily，并为模型或外部服务异常提供本\n\n地规则降级.\n\n这问，结来后异步生成引用原回答与检索证据的多维评估报告：基于FastAPl、PostgreSQL、\n\nRedis奕现JWT/RBAC、企业/个人工作空间、简历投递快服、企业逐请、站内消息与录用决策闭\n\n环",
+      "observation": {
+        "native_character_count": 0,
+        "text_block_count": 0,
+        "image_coverage": 0.9735196914013788,
+        "printable_ratio": 1.0
+      },
+      "used_ocr": true
+    }
+  ]
+}

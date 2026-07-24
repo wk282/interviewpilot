@@ -1,4 +1,6 @@
 import os
+from typing import Literal
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # ==========================================
@@ -12,11 +14,16 @@ class Settings(BaseSettings):
     # PostgreSQL and authentication configuration
     DATABASE_URL: str = "postgresql+asyncpg://interviewpilot:your_password@localhost:5432/interviewpilot"
     DATABASE_ECHO: bool = False
+    LANGGRAPH_CHECKPOINT_DATABASE_URL: str | None = None
+    INTERVIEW_PLAN_TIMEOUT_SECONDS: int = 180
+    INTERVIEW_PLAN_STALE_SECONDS: int = 600
     JWT_SECRET_KEY: str = "change-me-in-env"
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     DOCUMENT_STORAGE_ROOT: str = "data/uploads"
     DOCUMENT_MAX_FILE_SIZE_MB: int = 25
+    OCR_WORKER_ENABLED: bool = False
+    OCR_CELERY_QUEUE: str = "ocr"
     REDIS_URL: str = "redis://localhost:6379/0"
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"
@@ -44,6 +51,26 @@ class Settings(BaseSettings):
     CRAG_MAX_REWRITES: int = 1
     CRAG_MAX_WEB_SEARCHES: int = 1
     CRAG_WEB_SEARCH_TIMEOUT_SECONDS: int = 15
+    CRAG_LOCAL_FAST_PATH_ENABLED: bool = True
+    CRAG_FAST_PATH_MIN_EVIDENCE: int = 2
+    CRAG_FAST_PATH_MIN_FUSION_SCORE: float = 0.55
+
+    # Interview retrieval defaults are selected from the frozen offline benchmark.
+    INTERVIEW_RETRIEVAL_PROFILE: Literal[
+        "VECTOR",
+        "VECTOR_TRIGRAM",
+        "VECTOR_RERANK",
+        "VECTOR_TRIGRAM_RERANK",
+        "VECTOR_BM25",
+        "VECTOR_BM25_RERANK",
+        "VECTOR_TRIGRAM_BM25",
+        "VECTOR_TRIGRAM_BM25_RERANK",
+        "VECTOR_BM25_RRF",
+        "VECTOR_BM25_RRF_RERANK",
+        "VECTOR_TRIGRAM_BM25_RRF",
+        "VECTOR_TRIGRAM_BM25_RRF_RERANK",
+    ] = "VECTOR_BM25_RRF"
+    INTERVIEW_GLOBAL_RERANK_ENABLED: bool = False
     
     # Rerank 重排模型的专门配置
     RERANK_API_KEY: str | None = None
@@ -57,8 +84,9 @@ class Settings(BaseSettings):
     OPENSEARCH_INDEX_NAME: str = "interviewpilot-document-chunks"
     OPENSEARCH_TIMEOUT_SECONDS: int = 10
     
-    # 全局并发限制，防止并发量过高导致 429 Rate Limit
-    MAX_CONCURRENCY: int = 2
+    # 单进程 AI 并发限制，防止瞬时请求过高导致 429 Rate Limit
+    MAX_CONCURRENCY: int = Field(default=2, ge=1, le=100)
+    AI_CONCURRENCY_WAIT_TIMEOUT_SECONDS: float = Field(default=30.0, gt=0, le=600)
     
     # 告诉 Pydantic 去当前目录下找 .env 文件并读取里面的变量，忽略多余的配置（extra="ignore"）
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")

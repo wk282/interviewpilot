@@ -85,6 +85,36 @@ button, input { font: inherit; }
 .plan-question { width: 100%; display: grid; gap: 8px; }
 .plan-question-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .plan-question p { margin: 0; color: #596274; line-height: 1.7; }
+.observability-summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.observability-summary-grid > div { min-height: 78px; display: grid; align-content: space-between; padding: 14px; border: 1px solid #e5e8f0; border-radius: 8px; }
+.observability-summary-grid span { color: #747c8b; font-size: 12px; }
+.observability-summary-grid strong { color: #202755; font-size: 20px; }
+.observability-summary-tags { margin: 12px 0 8px; }
+.agent-trace-panel { width: 100%; }
+.agent-trace-collapse { border: 1px solid #e1e5ed; background: #f8f9fc; }
+.agent-trace-collapse > .ant-collapse-item > .ant-collapse-header { align-items: center; padding: 16px 18px; }
+.agent-trace-collapse > .ant-collapse-item > .ant-collapse-content > .ant-collapse-content-box { padding: 0 18px 18px; }
+.agent-trace-panel-heading { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.agent-trace-panel-heading > span { display: inline-flex; align-items: center; gap: 8px; color: #202755; font-weight: 700; }
+.agent-trace-turns { display: grid; gap: 0; }
+.agent-trace-turns > .ant-alert { margin-bottom: 8px; }
+.agent-trace-turn { border-bottom: 1px solid #e1e5ed; }
+.agent-trace-turn:last-child { border-bottom: 0; }
+.agent-trace-turn > summary { padding: 16px 4px; cursor: pointer; }
+.agent-trace-turn > summary::marker { color: #5b5ce2; }
+.agent-trace-turn-summary { display: inline-flex; width: calc(100% - 16px); align-items: flex-start; justify-content: space-between; gap: 18px; vertical-align: top; }
+.agent-trace-turn-summary > div:first-child { min-width: 0; display: grid; gap: 5px; }
+.agent-trace-turn-summary > div:first-child .ant-typography { max-width: 680px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-trace-turn-body { padding: 4px 4px 18px 18px; }
+.agent-trace-reason { margin: 0 0 18px !important; padding: 12px 14px; color: #3c4558; background: #fff; border-left: 3px solid #7d80dc; line-height: 1.7; }
+.agent-trace-retrieval-scores { margin: 0 0 20px; }
+.agent-trace-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; }
+.agent-trace-columns h5 { margin: 0 0 18px; font-size: 14px; }
+.agent-trace-columns .ant-timeline { margin-top: 4px; }
+.agent-trace-node { min-width: 0; display: grid; gap: 8px; padding-bottom: 8px; }
+.agent-trace-node-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.agent-trace-tools { display: flex; align-items: flex-start; gap: 8px; }
+.agent-trace-copy { margin: 0 !important; color: #626b7c; font-size: 12px; line-height: 1.65; overflow-wrap: anywhere; }
 .member-identity { display: flex; align-items: center; gap: 12px; }
 .member-identity .ant-avatar { flex: 0 0 auto; background: #5b5ce2; }
 .member-identity div { display: grid; gap: 3px; }
@@ -114,6 +144,9 @@ button, input { font: inherit; }
 .interview-start-state > .anticon, .interview-complete-state > .anticon { color: #4b4dc4; font-size: 40px; }
 .interview-start-state h4, .interview-complete-state h4 { margin: 0; }
 .interview-question-view { width: min(900px, 100%); margin: 0 auto; }
+.interview-turn-feedback { display: grid; gap: 10px; margin: 18px 0; padding: 14px 0; border-top: 1px solid #e5e7ec; border-bottom: 1px solid #e5e7ec; }
+.interview-turn-feedback-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.interview-turn-feedback .ant-typography { margin: 0; }
 .interview-progress-row { display: grid; grid-template-columns: 72px minmax(0, 1fr); align-items: center; gap: 16px; margin-bottom: 38px; }
 .interview-progress-row .ant-progress { margin: 0; }
 .interview-question-heading { min-height: 180px; padding-bottom: 28px; }
@@ -124,11 +157,15 @@ button, input { font: inherit; }
 .interview-answer-area { display: grid; gap: 18px; }
 .interview-answer-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .full-width-control { width: 100%; }
+.list-toolbar { display: flex; justify-content: flex-end; margin-bottom: 16px; }
+.list-search { width: min(340px, 100%); }
 .invitation-form-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(120px, 1fr) minmax(140px, 1fr); gap: 14px; }
 .candidate-invitation-result { margin-top: 22px; }
-.candidate-invitation-credentials { display: grid; gap: 10px; margin-top: 10px; }
+.candidate-invitation-credentials { width: 100%; min-width: 0; display: grid; gap: 10px; margin-top: 10px; }
 .candidate-invitation-credentials > div { display: grid; grid-template-columns: 70px minmax(0, 1fr) 34px; align-items: center; gap: 8px; }
+.candidate-invitation-credentials > .ant-typography { grid-column: 1 / -1; }
 .candidate-invitation-credentials code { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.candidate-invitation-record-credentials { min-width: min(500px, calc(100vw - 190px)); }
 .invitation-list-title { margin-top: 28px !important; }
 .candidate-invitation-page { min-height: 100vh; background: #f4f6fa; }
 .candidate-invitation-loading { display: grid; place-items: center; padding: 24px; }
@@ -189,12 +226,23 @@ button, input { font: inherit; }
 .application-resume-detail > div { min-width: 0; display: flex; align-items: center; gap: 10px; }
 .application-resume-detail strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .application-detail-actions { padding-top: 4px; }
+.resume-parsed-loading { min-height: 320px; display: grid; place-items: center; }
+.resume-parsed-result { display: grid; gap: 20px; }
+.resume-parsed-result h5 { margin: 4px 0 0; }
+.resume-parsed-text { max-height: calc(100vh - 330px); margin: 0; padding: 18px; overflow: auto; color: #283044; background: #f6f7fa; border: 1px solid #e3e7ef; border-radius: 6px; font-family: "Microsoft YaHei", sans-serif; font-size: 13px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
 .interview-report-panel { min-height: 520px; }
 .interview-report-content { display: grid; gap: 34px; }
 .report-overview { display: grid; grid-template-columns: 150px minmax(0, 1fr) auto; align-items: center; gap: 32px; padding-bottom: 28px; border-bottom: 1px solid #e7eaf1; }
 .report-score { display: grid; gap: 4px; }
 .report-score strong { color: #202755; font-size: 42px; line-height: 1; }
 .report-score span { color: #747c8b; font-size: 13px; }
+.quality-audit-section { display: grid; gap: 16px; }
+.quality-audit-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.quality-audit-heading h5 { margin: 0 0 4px; }
+.quality-audit-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.quality-audit-metrics > div { display: grid; gap: 6px; padding: 14px; border: 1px solid #e5e8f0; border-radius: 8px; }
+.quality-audit-metrics span { color: #747c8b; font-size: 12px; }
+.quality-audit-metrics strong { color: #202755; font-size: 20px; }
 .report-dimensions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 24px; }
 .report-dimension { display: grid; grid-template-columns: 92px minmax(0, 1fr); align-items: center; gap: 12px; color: #596274; font-size: 13px; }
 .report-dimension .ant-progress { margin: 0; }
@@ -229,6 +277,9 @@ button, input { font: inherit; }
   .dashboard-sidebar { display: none; }
   .dashboard-columns { grid-template-columns: 1fr; }
   .knowledge-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .observability-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .agent-trace-columns { grid-template-columns: 1fr; }
+  .quality-audit-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .invitation-form-grid, .candidate-invitation-summary { grid-template-columns: 1fr; }
   .candidate-invitation-summary { align-items: start; gap: 20px; }
   .message-center { grid-template-columns: 240px minmax(0, 1fr); }
@@ -240,14 +291,21 @@ button, input { font: inherit; }
   .workspace-content { width: calc(100% - 36px); padding: 45px 0; }
   .dashboard-main { padding: 28px 18px; }
   .dashboard-welcome { align-items: flex-start; flex-direction: column; }
+  .list-toolbar { justify-content: stretch; }
+  .list-search { width: 100%; }
   .metric-grid { grid-template-columns: 1fr; }
   .knowledge-grid { grid-template-columns: 1fr; }
+  .observability-summary-grid { grid-template-columns: 1fr; }
+  .agent-trace-panel-heading, .agent-trace-turn-summary { align-items: flex-start; flex-direction: column; }
+  .agent-trace-turn-summary > div:first-child .ant-typography { max-width: calc(100vw - 110px); }
+  .agent-trace-turn-body { padding-left: 8px; }
   .retrieval-search-actions, .retrieval-results-heading, .retrieval-result-heading { align-items: flex-start; flex-direction: column; }
   .plan-question-heading { flex-direction: column; }
   .interview-question-meta { align-items: flex-start; flex-direction: column; }
   .interview-countdown { text-align: left; }
   .report-overview { grid-template-columns: 1fr; }
   .report-dimensions, .report-findings { grid-template-columns: 1fr; }
+  .quality-audit-metrics { grid-template-columns: 1fr; }
   .candidate-interview-surface { padding: 26px 22px; }
   .candidate-interview-toolbar { grid-template-columns: 1fr; }
   .candidate-invitation-credentials > div { grid-template-columns: 1fr 34px; }

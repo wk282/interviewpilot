@@ -32,7 +32,10 @@ function CandidateDashboardPage() {
     }).catch(() => undefined)
   }, [workspace?.id])
 
-  const assignedInterviews = applications.filter((item) => item.status === 'INTERVIEW')
+  const assignedInterviews = applications.filter((item) => (
+    item.interview_session_id
+    && ['INTERVIEW', 'HIRED', 'REJECTED'].includes(item.status)
+  ))
   const completedMocks = interviews.filter((item) => item.status === 'COMPLETED').length
   const resumeProgress = profile?.resume_document_id ? 100 : 0
 

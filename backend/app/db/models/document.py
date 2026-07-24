@@ -18,7 +18,7 @@ class Document(TimestampMixin, Base):
     __tablename__ = "document"
     __table_args__ = (
         CheckConstraint(
-            "status IN ('UPLOADED', 'PROCESSING', 'READY', 'FAILED', 'DELETED')",
+            "status IN ('UPLOADED', 'PROCESSING', 'OCR_PENDING', 'READY', 'FAILED', 'DELETED')",
             name="document_status",
         ),
         CheckConstraint("status = 'DELETED' OR deleted_at IS NULL", name="document_deleted_at"),
@@ -58,7 +58,7 @@ class DocumentVersion(Base):
         CheckConstraint("version_number > 0", name="document_version_number"),
         CheckConstraint("file_size >= 0", name="document_version_file_size"),
         CheckConstraint(
-            "status IN ('UPLOADED', 'PROCESSING', 'READY', 'FAILED')",
+            "status IN ('UPLOADED', 'PROCESSING', 'OCR_PENDING', 'READY', 'FAILED')",
             name="document_version_status",
         ),
         CheckConstraint("file_hash ~ '^[0-9a-fA-F]{64}$'", name="document_version_file_hash"),

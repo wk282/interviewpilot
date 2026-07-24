@@ -16,12 +16,12 @@ class IngestionJob(Base):
     __tablename__ = "ingestion_job"
     __table_args__ = (
         CheckConstraint(
-            "status IN ('PENDING', 'RUNNING', 'COMPLETED', 'FAILED', 'CANCELLED')",
+            "status IN ('PENDING', 'RUNNING', 'WAITING_OCR', 'COMPLETED', 'FAILED', 'CANCELLED')",
             name="ingestion_job_status",
         ),
         CheckConstraint(
             "current_stage IS NULL OR current_stage IN ('VALIDATION', 'PARSING', 'QUALITY_CHECK', "
-            "'CLEANING', 'CHUNKING', 'EMBEDDING', 'INDEXING')",
+            "'OCR', 'CLEANING', 'CHUNKING', 'EMBEDDING', 'INDEXING')",
             name="ingestion_job_current_stage",
         ),
         CheckConstraint("progress BETWEEN 0 AND 100", name="ingestion_job_progress"),
@@ -69,7 +69,7 @@ class IngestionStageRun(Base):
     __table_args__ = (
         CheckConstraint(
             "stage IN ('VALIDATION', 'PARSING', 'QUALITY_CHECK', 'CLEANING', "
-            "'CHUNKING', 'EMBEDDING', 'INDEXING')",
+            "'OCR', 'CHUNKING', 'EMBEDDING', 'INDEXING')",
             name="ingestion_stage_run_stage",
         ),
         CheckConstraint("attempt_no > 0", name="ingestion_stage_run_attempt"),

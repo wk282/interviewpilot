@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.services.ai_concurrency import ai_concurrency_slot
 from app.db.models.interview import (
     InterviewAnswer,
     InterviewEvaluation,
@@ -156,14 +157,15 @@ async def evaluate_interview(
         timeout=120.0,
         max_retries=1,
     ) as client:
-        response = await client.chat.completions.create(
-            model=settings.LLM_MODEL,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
-            ],
-            response_format={"type": "json_object"},
-        )
+        async with ai_concurrency_slot("final_evaluator", settings.LLM_MODEL):
+            response = await client.chat.completions.create(
+                model=settings.LLM_MODEL,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+                ],
+                response_format={"type": "json_object"},
+            )
     generated = GeneratedEvaluation.model_validate(
         parse_json_content(response.choices[0].message.content or "")
     )

@@ -2,17 +2,23 @@ import { useEffect, useState } from 'react'
 import {
   CheckCircleOutlined,
   DeleteOutlined,
+  EyeOutlined,
   FileTextOutlined,
   InboxOutlined,
   PlayCircleOutlined,
   ReloadOutlined,
+  SearchOutlined,
 } from '@ant-design/icons'
 import {
   Alert,
   Button,
+  Descriptions,
+  Drawer,
   Empty,
+  Input,
   Modal,
   Progress,
+  Spin,
   Space,
   Table,
   Tag,
@@ -22,12 +28,12 @@ import {
   message,
 } from 'antd'
 import type { UploadProps } from 'antd'
-import { deleteDocument, getDocuments, resumeDocumentProcessing, retryDocumentProcessing, uploadDocument } from '../api/documents'
+import { deleteDocument, getDocumentParsedContent, getDocuments, resumeDocumentProcessing, retryDocumentProcessing, uploadDocument } from '../api/documents'
 import { getCandidates, updateCandidate } from '../api/interviews'
 import { createKnowledgeBase, getKnowledgeBases } from '../api/knowledgeBases'
 import AppHeader from '../components/AppHeader'
 import CandidateSidebar from '../components/CandidateSidebar'
-import type { DocumentItem } from '../types/document'
+import type { DocumentItem, DocumentParsedContent } from '../types/document'
 import type { CandidateProfile } from '../types/interview'
 import type { KnowledgeBase } from '../types/knowledgeBase'
 import { getApiErrorMessage } from '../utils/apiError'
@@ -42,6 +48,7 @@ const formatSize = (bytes: number) => {
 const statusLabel: Record<string, string> = {
   UPLOADED: '等待处理',
   PROCESSING: '处理中',
+  OCR_PENDING: '等待OCR处理',
   READY: '可使用',
   FAILED: '处理失败',
 }
@@ -49,16 +56,23 @@ const statusLabel: Record<string, string> = {
 const statusColor: Record<string, string> = {
   UPLOADED: 'default',
   PROCESSING: 'processing',
+  OCR_PENDING: 'gold',
   READY: 'success',
   FAILED: 'error',
 }
 
 const canContinueProcessing = (item: DocumentItem) => (
-  item.ingestion_status === 'PENDING'
-  && (
-    ['CHUNKING', 'EMBEDDING'].includes(item.ingestion_stage ?? '')
-    || (item.ingestion_stage === 'PARSING' && item.original_filename.toLowerCase().endsWith('.docx'))
+  (
+    item.ingestion_status === 'PENDING'
+    && (
+      ['CHUNKING', 'EMBEDDING'].includes(item.ingestion_stage ?? '')
+      || (
+        item.ingestion_stage === 'PARSING'
+        && ['.docx', '.pdf'].some((extension) => item.original_filename.toLowerCase().endsWith(extension))
+      )
+    )
   )
+  || (item.ingestion_status === 'WAITING_OCR' && item.ingestion_stage === 'OCR')
 )
 
 function ResumesPage() {
@@ -69,6 +83,10 @@ function ResumesPage() {
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [actionId, setActionId] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [parsedContent, setParsedContent] = useState<DocumentParsedContent | null>(null)
+  const [parsedContentOpen, setParsedContentOpen] = useState(false)
+  const [parsedContentLoading, setParsedContentLoading] = useState(false)
 
   const loadData = async (showLoading = true) => {
     if (!workspace) return
@@ -98,18 +116,21 @@ function ResumesPage() {
 
   useEffect(() => { void loadData() }, [workspace?.id])
 
-  const processing = resumes.some((item) => (
-    item.ingestion_status === 'RUNNING'
-    || (
-      item.ingestion_status === 'PENDING'
-      && !['PARSING', 'CHUNKING', 'EMBEDDING'].includes(item.ingestion_stage ?? '')
-    )
-  ))
+  const processing = resumes.some((item) =>
+    ['PENDING', 'RUNNING', 'WAITING_OCR'].includes(item.ingestion_status),
+  )
   useEffect(() => {
     if (!processing) return
     const timer = window.setInterval(() => { void loadData(false) }, 3000)
     return () => window.clearInterval(timer)
   }, [processing, workspace?.id])
+
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase()
+  const filteredResumes = resumes.filter((item) => (
+    !normalizedSearchQuery
+    || [item.original_filename, item.name, item.status, statusLabel[item.status]]
+      .some((value) => value?.toLowerCase().includes(normalizedSearchQuery))
+  ))
 
   const ensureResumeBase = async () => {
     if (!workspace) throw new Error('工作空间不存在')
@@ -201,6 +222,26 @@ function ResumesPage() {
     }
   }
 
+  const viewParsedContent = async (item: DocumentItem) => {
+    if (!workspace) return
+    setParsedContent(null)
+    setParsedContentOpen(true)
+    setParsedContentLoading(true)
+    try {
+      const content = await getDocumentParsedContent(
+        workspace.id,
+        item.knowledge_base_id,
+        item.id,
+      )
+      setParsedContent(content)
+    } catch (error) {
+      setParsedContentOpen(false)
+      message.error(getApiErrorMessage(error, '解析结果加载失败'))
+    } finally {
+      setParsedContentLoading(false)
+    }
+  }
+
   const removeResume = (item: DocumentItem) => {
     if (!workspace) return
     const isCurrent = profile?.resume_document_id === item.id
@@ -254,13 +295,16 @@ function ResumesPage() {
           )}
 
           <section className="content-panel document-panel">
-            {resumes.length === 0 && !loading ? (
+            <div className="list-toolbar">
+              <Input allowClear prefix={<SearchOutlined />} value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="搜索简历文件名或状态" className="list-search" />
+            </div>
+            {filteredResumes.length === 0 && !loading ? (
               <Empty description="尚未上传简历" image={Empty.PRESENTED_IMAGE_SIMPLE} />
             ) : (
               <Table<DocumentItem>
                 rowKey="id"
                 loading={loading}
-                dataSource={resumes}
+                dataSource={filteredResumes}
                 pagination={false}
                 scroll={{ x: 760 }}
                 columns={[
@@ -302,9 +346,19 @@ function ResumesPage() {
                   {
                     title: '操作',
                     key: 'actions',
-                    width: 160,
+                    width: 200,
                     render: (_, item) => (
                       <Space>
+                        {item.status === 'READY' && (
+                          <Tooltip title="查看解析文本">
+                            <Button
+                              type="text"
+                              icon={<EyeOutlined />}
+                              onClick={() => viewParsedContent(item)}
+                              aria-label="查看简历解析文本"
+                            />
+                          </Tooltip>
+                        )}
                         {canContinueProcessing(item) && (
                           <Tooltip title="继续处理">
                             <Button
@@ -358,6 +412,47 @@ function ResumesPage() {
           </section>
         </section>
       </div>
+      <Drawer
+        title={parsedContent?.original_filename ?? '简历解析结果'}
+        open={parsedContentOpen}
+        width="min(760px, 100vw)"
+        destroyOnHidden
+        onClose={() => setParsedContentOpen(false)}
+      >
+        {parsedContentLoading ? (
+          <div className="resume-parsed-loading"><Spin /></div>
+        ) : parsedContent ? (
+          <div className="resume-parsed-result">
+            <Descriptions size="small" column={{ xs: 1, sm: 2 }} bordered>
+              <Descriptions.Item label="解析器">
+                {parsedContent.parser_name ?? '-'}
+                {parsedContent.parser_version ? ` v${parsedContent.parser_version}` : ''}
+              </Descriptions.Item>
+              <Descriptions.Item label="文本字符">{parsedContent.character_count}</Descriptions.Item>
+              <Descriptions.Item label="内容块">{parsedContent.block_count}</Descriptions.Item>
+              <Descriptions.Item label="页数">{parsedContent.page_count ?? '-'}</Descriptions.Item>
+              <Descriptions.Item label="原生文本块">{parsedContent.native_block_count}</Descriptions.Item>
+              <Descriptions.Item label="OCR文本块">{parsedContent.ocr_block_count}</Descriptions.Item>
+              {parsedContent.page_kinds.length > 0 && (
+                <Descriptions.Item label="页面类型" span={2}>
+                  <Space size={[4, 6]} wrap>
+                    {parsedContent.page_kinds.map((kind, index) => (
+                      <Tag key={`${index}-${kind}`}>第{index + 1}页 {kind}</Tag>
+                    ))}
+                  </Space>
+                </Descriptions.Item>
+              )}
+              {parsedContent.ocr_processed_pages.length > 0 && (
+                <Descriptions.Item label="OCR页" span={2}>
+                  {parsedContent.ocr_processed_pages.join('、')}
+                </Descriptions.Item>
+              )}
+            </Descriptions>
+            <Typography.Title level={5}>解析文本</Typography.Title>
+            <pre className="resume-parsed-text">{parsedContent.plain_text}</pre>
+          </div>
+        ) : null}
+      </Drawer>
     </main>
   )
 }

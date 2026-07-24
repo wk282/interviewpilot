@@ -1,5 +1,6 @@
 import asyncio
 import hashlib
+import json
 import shutil
 import uuid
 from datetime import datetime, timezone
@@ -20,8 +21,9 @@ from app.db.models.knowledge_base import KnowledgeBase
 from app.db.models.recruitment import ApplicationResume
 from app.db.models.user import AppUser
 from app.db.session import get_db_session
-from app.schemas.document import DocumentResponse
+from app.schemas.document import DocumentParsedContentResponse, DocumentResponse
 from app.schemas.ingestion import IngestionRetryRequest
+from app.workers.celery_app import celery_app
 from app.workers.ingestion_tasks import process_document
 from app.core.logger import logger
 
@@ -91,6 +93,8 @@ def to_response(
         ingestion_status=job.status,
         ingestion_stage=job.current_stage,
         ingestion_progress=job.progress,
+        ingestion_error_code=job.error_code,
+        ingestion_error_message=job.error_message,
         created_at=document.created_at,
     )
 
@@ -225,6 +229,105 @@ async def upload_document(
         await file.close()
 
 
+@router.get(
+    "/{document_id}/parsed-content",
+    response_model=DocumentParsedContentResponse,
+)
+async def get_document_parsed_content(
+    workspace_id: uuid.UUID,
+    knowledge_base_id: uuid.UUID,
+    document_id: uuid.UUID,
+    current_user: AppUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> DocumentParsedContentResponse:
+    await get_accessible_knowledge_base(
+        session, workspace_id, knowledge_base_id, current_user
+    )
+    row = (
+        await session.execute(
+            select(Document, DocumentVersion)
+            .join(DocumentVersion, DocumentVersion.document_id == Document.id)
+            .where(
+                Document.id == document_id,
+                Document.knowledge_base_id == knowledge_base_id,
+                Document.status == "READY",
+                DocumentVersion.status == "READY",
+            )
+            .order_by(DocumentVersion.version_number.desc())
+            .limit(1)
+        )
+    ).one_or_none()
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="文档尚未完成解析",
+        )
+
+    document, version = row
+    if not version.parsed_content_key:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="解析结果不存在",
+        )
+
+    storage_root = Path(settings.DOCUMENT_STORAGE_ROOT).resolve()
+    parsed_path = (storage_root / version.parsed_content_key).resolve()
+    if parsed_path != storage_root and storage_root not in parsed_path.parents:
+        logger.warning(
+            f"Rejected parsed content path outside storage root | document_id={document.id}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="解析结果不存在",
+        )
+    if not parsed_path.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="解析结果文件不存在",
+        )
+
+    try:
+        parsed = json.loads(parsed_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        logger.error(
+            f"Failed to read parsed content | document_id={document.id} | "
+            f"error={type(error).__name__}: {error}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="解析结果文件读取失败",
+        ) from error
+
+    plain_text = str(parsed.get("plain_text") or "")
+    blocks = parsed.get("blocks")
+    blocks = blocks if isinstance(blocks, list) else []
+    metadata = parsed.get("metadata")
+    metadata = metadata if isinstance(metadata, dict) else {}
+    quality_report = version.quality_report or {}
+    page_kinds = metadata.get("page_kinds") or quality_report.get("page_kinds") or []
+    ocr_processed_pages = (
+        metadata.get("ocr_processed_pages")
+        or quality_report.get("ocr_processed_pages")
+        or []
+    )
+    page_count = metadata.get("page_count") or quality_report.get("page_count")
+
+    return DocumentParsedContentResponse(
+        document_id=document.id,
+        original_filename=version.original_filename,
+        parser_name=version.parser_name,
+        parser_version=version.parser_version,
+        character_count=len(plain_text),
+        block_count=len(blocks),
+        page_count=int(page_count) if page_count is not None else None,
+        page_kinds=[str(item) for item in page_kinds],
+        ocr_processed_pages=[int(item) for item in ocr_processed_pages],
+        native_block_count=sum(block.get("source") == "NATIVE" for block in blocks if isinstance(block, dict)),
+        ocr_block_count=sum(block.get("source") == "OCR" for block in blocks if isinstance(block, dict)),
+        plain_text=plain_text,
+    )
+
+
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_document(
     workspace_id: uuid.UUID,
@@ -324,8 +427,27 @@ async def resume_document_processing(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文档不存在")
 
     document, version, job = row
+    if job.status == "WAITING_OCR" and job.current_stage == "OCR":
+        if not settings.OCR_WORKER_ENABLED:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="OCR Worker尚未启用，无法继续处理扫描PDF",
+            )
+        try:
+            celery_app.send_task(
+                "ocr.process_pdf",
+                args=[str(job.id)],
+                queue=settings.OCR_CELERY_QUEUE,
+            )
+        except Exception as error:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"OCR任务队列不可用：{error}",
+            ) from error
+        return to_response(document, version, job)
+
     resumable_stages = {"CHUNKING", "EMBEDDING"}
-    if Path(version.storage_key).suffix.lower() == ".docx":
+    if Path(version.storage_key).suffix.lower() in {".docx", ".pdf"}:
         resumable_stages.add("PARSING")
     if job.status != "PENDING" or job.current_stage not in resumable_stages:
         raise HTTPException(

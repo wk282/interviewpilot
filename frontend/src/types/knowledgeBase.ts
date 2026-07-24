@@ -23,6 +23,8 @@ export interface KnowledgeBaseCreateRequest {
   visibility: 'PRIVATE' | 'WORKSPACE'
 }
 
-export interface KnowledgeBaseRenameRequest {
-  name: string
+export interface KnowledgeBaseUpdateRequest {
+  name?: string
+  purpose?: KnowledgeBasePurpose
+  visibility?: 'PRIVATE' | 'WORKSPACE'
 }

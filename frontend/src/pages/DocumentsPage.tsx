@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ArrowLeftOutlined, DeleteOutlined, FileTextOutlined, InboxOutlined, PlayCircleOutlined, RedoOutlined, SearchOutlined, SyncOutlined } from '@ant-design/icons'
-import { Button, Empty, Modal, Progress, Space, Table, Tag, Typography, Upload, message } from 'antd'
+import { Button, Empty, Input, Modal, Progress, Space, Table, Tag, Tooltip, Typography, Upload, message } from 'antd'
 import type { UploadProps } from 'antd'
 import { useNavigate, useParams } from 'react-router-dom'
 import { deleteDocument, getDocuments, resumeDocumentProcessing, retryDocumentProcessing, uploadDocument } from '../api/documents'
@@ -15,12 +15,36 @@ import { getActiveWorkspace } from '../utils/workspaceStorage'
 const allowedExtensions = ['.pdf', '.docx', '.md', '.txt']
 
 const canContinueProcessing = (item: DocumentItem) => (
-  item.ingestion_status === 'PENDING'
-  && (
-    ['CHUNKING', 'EMBEDDING'].includes(item.ingestion_stage ?? '')
-    || (item.ingestion_stage === 'PARSING' && item.original_filename.toLowerCase().endsWith('.docx'))
+  (
+    item.ingestion_status === 'PENDING'
+    && (
+      ['CHUNKING', 'EMBEDDING'].includes(item.ingestion_stage ?? '')
+      || (
+        item.ingestion_stage === 'PARSING'
+        && ['.docx', '.pdf'].some((extension) => item.original_filename.toLowerCase().endsWith(extension))
+      )
+    )
   )
+  || (item.ingestion_status === 'WAITING_OCR' && item.ingestion_stage === 'OCR')
 )
+
+const ingestionStatusLabel: Record<string, string> = {
+  PENDING: '等待处理',
+  RUNNING: '处理中',
+  WAITING_OCR: '等待OCR处理',
+  COMPLETED: '已完成',
+  FAILED: '处理失败',
+  CANCELLED: '已取消',
+}
+
+const ingestionStatusColor: Record<string, string> = {
+  PENDING: 'default',
+  RUNNING: 'processing',
+  WAITING_OCR: 'gold',
+  COMPLETED: 'green',
+  FAILED: 'red',
+  CANCELLED: 'default',
+}
 
 function formatSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`
@@ -38,6 +62,7 @@ function DocumentsPage() {
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [reindexing, setReindexing] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
 
   const loadItems = () => {
     if (!workspace || !knowledgeBaseId) return
@@ -50,7 +75,15 @@ function DocumentsPage() {
 
   useEffect(loadItems, [workspace?.id, knowledgeBaseId])
 
-  const hasActiveJob = items.some((item) => ['PENDING', 'RUNNING'].includes(item.ingestion_status))
+  const hasActiveJob = items.some((item) =>
+    ['PENDING', 'RUNNING', 'WAITING_OCR'].includes(item.ingestion_status),
+  )
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase()
+  const filteredItems = items.filter((item) => (
+    !normalizedSearchQuery
+    || [item.original_filename, item.name, item.status, item.ingestion_status, ingestionStatusLabel[item.ingestion_status]]
+      .some((value) => value?.toLowerCase().includes(normalizedSearchQuery))
+  ))
   useEffect(() => {
     if (!hasActiveJob || !workspace || !knowledgeBaseId) return
     const timer = window.setInterval(() => {
@@ -174,19 +207,22 @@ function DocumentsPage() {
           </div>
 
           <section className="content-panel document-panel">
-            {items.length === 0 && !loading ? (
+            <div className="list-toolbar">
+              <Input allowClear prefix={<SearchOutlined />} value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="搜索文件名或处理状态" className="list-search" />
+            </div>
+            {filteredItems.length === 0 && !loading ? (
               <Empty description="暂无文档" />
             ) : (
               <Table<DocumentItem>
                 rowKey="id"
                 loading={loading}
-                dataSource={items}
+                dataSource={filteredItems}
                 pagination={false}
                 scroll={{ x: 760 }}
                 columns={[
                   { title: '文件', key: 'file', render: (_, item) => <div className="document-name"><FileTextOutlined /><div><strong>{item.original_filename}</strong><span>{formatSize(item.file_size)}</span></div></div> },
                   { title: '版本', dataIndex: 'version_number', key: 'version', render: (value) => `v${value}` },
-                  { title: '状态', dataIndex: 'ingestion_status', key: 'status', render: (value) => <Tag color={value === 'COMPLETED' ? 'green' : value === 'FAILED' ? 'red' : 'gold'}>{value}</Tag> },
+                  { title: '状态', key: 'status', render: (_, item) => <Tooltip title={item.ingestion_error_message}><Tag color={ingestionStatusColor[item.ingestion_status]}>{ingestionStatusLabel[item.ingestion_status] ?? item.ingestion_status}</Tag></Tooltip> },
                   { title: '入库进度', key: 'progress', width: 180, render: (_, item) => <Progress percent={item.ingestion_progress} size="small" /> },
                   { title: '上传时间', dataIndex: 'created_at', key: 'created', render: (value) => new Date(value).toLocaleString('zh-CN') },
                   ...(canManage ? [{

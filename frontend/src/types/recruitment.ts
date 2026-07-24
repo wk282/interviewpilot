@@ -36,6 +36,8 @@ export interface JobApplication {
   resume_status: string | null
   interview_session_id: string | null
   interview_status: string | null
+  interview_current_question_order: number | null
+  interview_max_question_count: number | null
   thread_id: string
   submitted_at: string
   reviewed_at: string | null
@@ -52,6 +54,7 @@ export interface ApplicationInterviewCreateRequest {
   max_question_count: number
   question_time_limit_minutes: number
   scheduled_at?: string
+  reference_knowledge_base_ids?: string[]
 }
 
 export interface InterviewDecision {

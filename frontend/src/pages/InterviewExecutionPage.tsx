@@ -29,6 +29,12 @@ import CandidateSidebar from '../components/CandidateSidebar'
 import EnterpriseSidebar from '../components/EnterpriseSidebar'
 import type { InterviewRuntime } from '../types/interview'
 import { getApiErrorMessage } from '../utils/apiError'
+import {
+  readInterviewAnswerDraft,
+  removeInterviewAnswerDraft,
+  removeInterviewAnswerDrafts,
+  saveInterviewAnswerDraft,
+} from '../utils/interviewAnswerDraft'
 import { getActiveWorkspace } from '../utils/workspaceStorage'
 
 const formatCountdown = (seconds: number) => {
@@ -52,6 +58,14 @@ const difficultyLabel: Record<string, string> = {
   HARD: '深入',
 }
 
+const criticActionLabel: Record<string, string> = {
+  FOLLOW_UP: '继续追问',
+  INCREASE_DIFFICULTY: '提高难度',
+  DECREASE_DIFFICULTY: '降低难度',
+  SWITCH_TOPIC: '切换能力点',
+  END_INTERVIEW: '结束面试',
+}
+
 function InterviewExecutionPage() {
   const { interviewId = '' } = useParams()
   const workspace = getActiveWorkspace()
@@ -68,6 +82,29 @@ function InterviewExecutionPage() {
   const [submitting, setSubmitting] = useState(false)
   const [remainingSeconds, setRemainingSeconds] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  const draftScopeId = `interview:${interviewId}`
+  const currentQuestionId = runtime?.current_question?.id ?? null
+
+  useEffect(() => {
+    setAnswer(
+      currentQuestionId
+        ? readInterviewAnswerDraft(draftScopeId, currentQuestionId)
+        : '',
+    )
+  }, [draftScopeId, currentQuestionId])
+
+  useEffect(() => {
+    if (runtime?.status === 'COMPLETED') {
+      removeInterviewAnswerDrafts(draftScopeId)
+    }
+  }, [draftScopeId, runtime?.status])
+
+  const updateAnswer = (content: string) => {
+    setAnswer(content)
+    if (currentQuestionId) {
+      saveInterviewAnswerDraft(draftScopeId, currentQuestionId, content)
+    }
+  }
 
   const fetchRuntime = () => {
     if (assignedInterview) return getAssignedInterviewRuntime(interviewId)
@@ -146,6 +183,7 @@ function InterviewExecutionPage() {
         setSubmitting(true)
         skipQuestion(question.id)
           .then((result) => {
+            removeInterviewAnswerDraft(draftScopeId, question.id)
             setRuntime(result)
             setAnswer('')
             message.warning('当前问题已超时，已进入下一题')
@@ -163,13 +201,19 @@ function InterviewExecutionPage() {
     updateCountdown()
     const timer = window.setInterval(updateCountdown, 1000)
     return () => window.clearInterval(timer)
-  }, [runtime?.status, runtime?.current_question?.id, runtime?.current_question?.asked_at, runtime?.question_time_limit_seconds, workspace?.id, interviewId])
+  }, [runtime?.status, runtime?.current_question?.id, runtime?.current_question?.asked_at, runtime?.question_time_limit_seconds, workspace?.id, interviewId, draftScopeId])
 
   useEffect(() => {
     if (runtime?.status !== 'IN_PROGRESS' || runtime.current_question) return
     const timer = window.setInterval(() => { void loadRuntime(false) }, 2000)
     return () => window.clearInterval(timer)
   }, [runtime?.status, runtime?.current_question?.id, workspace?.id, interviewId])
+
+  useEffect(() => {
+    if (!assignedInterview || runtime?.status !== 'COMPLETED' || runtime.decision) return
+    const timer = window.setInterval(() => { void loadRuntime(false) }, 5000)
+    return () => window.clearInterval(timer)
+  }, [assignedInterview, runtime?.status, runtime?.decision, workspace?.id, interviewId])
 
   const begin = async () => {
     if ((!workspace && !assignedInterview) || actionInFlight.current) return
@@ -196,6 +240,7 @@ function InterviewExecutionPage() {
         answer.trim(),
         Math.max(0, Math.round((Date.now() - questionStartedAt.current) / 1000)),
       )
+      removeInterviewAnswerDraft(draftScopeId, runtime.current_question.id)
       setAnswer('')
       setRuntime(result)
       if (result.question_timed_out) message.warning('当前问题已超时，回答未提交')
@@ -222,6 +267,7 @@ function InterviewExecutionPage() {
         try {
           setSubmitting(true)
           setRuntime(await skipQuestion(questionId))
+          removeInterviewAnswerDraft(draftScopeId, questionId)
           setAnswer('')
         } catch (requestError) {
           message.error(getApiErrorMessage(requestError, '问题跳过失败'))
@@ -247,6 +293,7 @@ function InterviewExecutionPage() {
         try {
           setSubmitting(true)
           setRuntime(await completeInterview())
+          removeInterviewAnswerDrafts(draftScopeId)
           setAnswer('')
         } catch (requestError) {
           message.error(getApiErrorMessage(requestError, '面试结束失败'))
@@ -297,8 +344,19 @@ function InterviewExecutionPage() {
             ) : runtime?.status === 'COMPLETED' ? (
               <div className="interview-complete-state">
                 <CheckCircleOutlined />
-                <Typography.Title level={4}>面试已完成</Typography.Title>
+                <Typography.Title level={4}>
+                  {assignedInterview && runtime.decision === 'HIRED'
+                    ? '恭喜，你已通过本次面试'
+                    : assignedInterview && runtime.decision === 'REJECTED'
+                      ? '很遗憾，你未通过本次面试'
+                      : assignedInterview && ['PENDING', 'GENERATING'].includes(runtime.evaluation_status ?? '')
+                        ? '面试已完成，正在生成评估'
+                        : assignedInterview
+                          ? '面试已完成，结果待企业公布'
+                          : '面试已完成'}
+                </Typography.Title>
                 <Typography.Text type="secondary">已处理 {runtime.completed_question_count} 道问题</Typography.Text>
+                {runtime.decided_at && <Typography.Text type="secondary">结果公布时间：{new Date(runtime.decided_at).toLocaleString('zh-CN')}</Typography.Text>}
                 <Space>
                   <Button onClick={() => navigate(interviewsPath)}>返回面试列表</Button>
                   {!assignedInterview && <Button type="primary" onClick={() => navigate(`${interviewsPath}/${interviewId}/report`)}>查看评估报告</Button>}
@@ -310,6 +368,23 @@ function InterviewExecutionPage() {
                   <Typography.Text type="secondary">{runtime.completed_question_count} / {runtime.max_question_count}</Typography.Text>
                   <Progress percent={progress} showInfo={false} />
                 </div>
+                {runtime.last_turn_feedback && (
+                  <div className="interview-turn-feedback">
+                    <div className="interview-turn-feedback-header">
+                      <strong>上一轮反馈 · {runtime.last_turn_feedback.score.toFixed(0)} 分</strong>
+                      <Space wrap>
+                        <Tag color="blue">{criticActionLabel[runtime.last_turn_feedback.next_action] ?? runtime.last_turn_feedback.next_action}</Tag>
+                        {runtime.adaptive_plan_version && <Tag>计划 v{runtime.adaptive_plan_version}</Tag>}
+                      </Space>
+                    </div>
+                    <Typography.Paragraph>{runtime.last_turn_feedback.reason}</Typography.Paragraph>
+                    {runtime.last_turn_feedback.knowledge_gaps.length > 0 && (
+                      <Space wrap>
+                        {runtime.last_turn_feedback.knowledge_gaps.map((item) => <Tag key={item}>{item}</Tag>)}
+                      </Space>
+                    )}
+                  </div>
+                )}
                 <div className="interview-question-heading">
                   <div className="interview-question-meta">
                     <Space wrap>
@@ -326,7 +401,7 @@ function InterviewExecutionPage() {
                 <div className="interview-answer-area">
                   <Input.TextArea
                     value={answer}
-                    onChange={(event) => setAnswer(event.target.value)}
+                    onChange={(event) => updateAnswer(event.target.value)}
                     autoSize={{ minRows: 8, maxRows: 16 }}
                     maxLength={20000}
                     showCount

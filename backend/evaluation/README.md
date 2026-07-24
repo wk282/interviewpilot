@@ -82,7 +82,18 @@ Web results remain in the Trace but are excluded from local corpus relevance sco
 
 ## 4. Score Critic Predictions
 
-Export exactly one JSON object per `case_id` from the Critic under test:
+Run the production Answer Critic against all 20 cases and generate one report:
+
+```powershell
+python -m evaluation.runner run-critic
+```
+
+This command reuses `answer-critic-v1`, the production Pydantic contract, and the same
+Mini model configuration. Model failures use the production fallback and are reported
+through `fallback_prediction_rate`.
+
+To score predictions produced by another model or prompt, export exactly one JSON object
+per `case_id`:
 
 ```json
 {"case_id":"turn-001","score":90,"next_action":"INCREASE_DIFFICULTY","difficulty_delta":1,"knowledge_gaps":[]}

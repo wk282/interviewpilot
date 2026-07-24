@@ -13,7 +13,12 @@ RetrievalProfile = Literal[
     "VECTOR_BM25_RERANK",
     "VECTOR_TRIGRAM_BM25",
     "VECTOR_TRIGRAM_BM25_RERANK",
+    "VECTOR_BM25_RRF",
+    "VECTOR_BM25_RRF_RERANK",
+    "VECTOR_TRIGRAM_BM25_RRF",
+    "VECTOR_TRIGRAM_BM25_RRF_RERANK",
 ]
+
 
 
 class RetrievalSearchRequest(BaseModel):
@@ -49,3 +54,21 @@ class RetrievalSearchResponse(BaseModel):
     retrieval_profile: RetrievalProfile
     result_count: int
     results: list[RetrievalSearchResult]
+
+
+def compute_rrf_score(
+    candidate_ids: list[uuid.UUID],
+    vector_ranks: dict[uuid.UUID, int],
+    bm25_ranks: dict[uuid.UUID, int],
+    k: int = 60,
+) -> dict[uuid.UUID, float]:
+    """标准 RRF (Reciprocal Rank Fusion) 融合算法"""
+    rrf_scores = {}
+    for chunk_id in candidate_ids:
+        score = 0.0
+        if chunk_id in vector_ranks:
+            score += 1.0 / (k + vector_ranks[chunk_id])
+        if chunk_id in bm25_ranks:
+            score += 1.0 / (k + bm25_ranks[chunk_id])
+        rrf_scores[chunk_id] = score
+    return rrf_scores

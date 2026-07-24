@@ -15,14 +15,15 @@ from app.core.permissions import require_workspace_role
 from app.services.bm25_store import OpenSearchBM25Store
 from app.db.models.document import Document, DocumentVersion
 from app.db.models.ingestion import IngestionJob
+from app.db.models.interview import JobPosition
 from app.db.models.knowledge_base import KnowledgeBase
 from app.db.models.recruitment import ApplicationResume
 from app.db.models.user import AppUser
 from app.db.session import get_db_session
 from app.schemas.knowledge_base import (
     KnowledgeBaseCreateRequest,
-    KnowledgeBaseRenameRequest,
     KnowledgeBaseResponse,
+    KnowledgeBaseUpdateRequest,
 )
 
 
@@ -96,14 +97,16 @@ async def create_knowledge_base(
 
 
 @router.patch("/{knowledge_base_id}", response_model=KnowledgeBaseResponse)
-async def rename_knowledge_base(
+async def update_knowledge_base(
     workspace_id: uuid.UUID,
     knowledge_base_id: uuid.UUID,
-    request: KnowledgeBaseRenameRequest,
+    request: KnowledgeBaseUpdateRequest,
     current_user: AppUser = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ) -> KnowledgeBase:
-    await require_workspace_role(session, workspace_id, current_user.id, MANAGER_ROLES)
+    workspace, _ = await require_workspace_role(
+        session, workspace_id, current_user.id, MANAGER_ROLES
+    )
     knowledge_base = await session.scalar(
         select(KnowledgeBase).where(
             KnowledgeBase.id == knowledge_base_id,
@@ -122,16 +125,45 @@ async def rename_knowledge_base(
     if managed_resume_id is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="岗位申请简历快照知识库由系统管理，不能改名",
+            detail="岗位申请简历快照知识库由系统管理，不能编辑",
         )
 
-    name = request.name.strip()
-    if not name:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="知识库名称不能为空",
+    if request.purpose is not None and request.purpose != knowledge_base.purpose:
+        if "RESUME" in {request.purpose, knowledge_base.purpose}:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="简历知识库属于特殊类型，不能与其他分类互相转换",
+            )
+        allowed_purposes = (
+            PERSONAL_PURPOSES if workspace.type == "PERSONAL" else ORGANIZATION_PURPOSES
         )
-    knowledge_base.name = name
+        if request.purpose not in allowed_purposes:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="该知识库分类不适用于当前工作空间",
+            )
+        bound_position_id = await session.scalar(
+            select(JobPosition.id)
+            .where(JobPosition.knowledge_base_id == knowledge_base_id)
+            .limit(1)
+        )
+        if bound_position_id is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="该知识库已绑定岗位，请先解除岗位绑定再修改分类",
+            )
+        knowledge_base.purpose = request.purpose
+
+    if request.name is not None:
+        name = request.name.strip()
+        if not name:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="知识库名称不能为空",
+            )
+        knowledge_base.name = name
+    if request.visibility is not None:
+        knowledge_base.visibility = request.visibility
     try:
         await session.commit()
         await session.refresh(knowledge_base)

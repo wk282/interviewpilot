@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { CopyOutlined, DeleteOutlined, EditOutlined, EyeOutlined, FileAddOutlined, FileDoneOutlined, MailOutlined, PlayCircleOutlined, PlusOutlined, StopOutlined } from '@ant-design/icons'
+import { CopyOutlined, DeleteOutlined, EditOutlined, EyeOutlined, FileAddOutlined, FileDoneOutlined, MailOutlined, PlayCircleOutlined, PlusOutlined, SearchOutlined, StopOutlined } from '@ant-design/icons'
 import { Alert, Button, Empty, Form, Input, InputNumber, List, Modal, Select, Space, Table, Tabs, Tag, Tooltip, Typography, message } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import {
+  cancelInterviewPlan,
   createCandidate,
   createInterviewSession,
   createPosition,
@@ -12,6 +13,7 @@ import {
   generateInterviewPlan,
   getCandidates,
   getInterviewPlan,
+  getInterviewObservability,
   getInterviewSessions,
   getPositions,
   updateCandidate,
@@ -26,6 +28,7 @@ import {
 } from '../api/interviewInvitations'
 import { sendPlatformInterviewInvitation } from '../api/recruitment'
 import AppHeader from '../components/AppHeader'
+import AgentExecutionTracePanel from '../components/AgentExecutionTracePanel'
 import CandidateSidebar from '../components/CandidateSidebar'
 import EnterpriseSidebar from '../components/EnterpriseSidebar'
 import type {
@@ -34,10 +37,12 @@ import type {
   InterviewSession,
   InterviewSessionCreateRequest,
   InterviewPlan,
+  InterviewObservability,
+  InterviewQuestion,
   JobPosition,
   JobPositionCreateRequest,
 } from '../types/interview'
-import type { KnowledgeBase } from '../types/knowledgeBase'
+import type { KnowledgeBase, KnowledgeBasePurpose } from '../types/knowledgeBase'
 import type { DocumentItem } from '../types/document'
 import type {
   InterviewInvitation,
@@ -71,7 +76,69 @@ const statusColors: Record<string, string> = {
   REVOKED: 'red',
 }
 
+const knowledgeBasePurposeLabels: Record<KnowledgeBasePurpose, string> = {
+  RESUME: '简历',
+  PERSONAL_LEARNING: '个人学习资料',
+  ENTERPRISE_QUESTION_BANK: '企业题库',
+  JOB_SPECIFIC: '岗位专项',
+  SCORING_RUBRIC: '评分标准',
+  TECHNICAL_STANDARD: '技术规范',
+}
+
 const ACTIVE_INVITATION_STATUSES = new Set(['PENDING', 'OPENED', 'VERIFIED', 'STARTED'])
+
+const observabilityStageLabels: Record<string, string> = {
+  TOTAL: '整轮链路',
+  CRITIC: 'Answer Critic',
+  PLAN_REVISER: 'Plan Reviser',
+  EMBEDDING: 'Embedding',
+  KNOWLEDGE_RETRIEVAL: '知识库检索',
+  RERANKER: 'Reranker',
+  RETRIEVAL_GRADER: 'Retrieval Grader',
+  QUERY_REWRITE: '查询改写',
+  WEB_SEARCH: '联网搜索',
+  CRAG: 'CRAG 总计',
+  CONDUCTOR: 'Conductor',
+  AI_QUEUE: 'AI 并发排队',
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+}
+
+function formatLatency(value: unknown): string | null {
+  return typeof value === 'number' ? `${(value / 1000).toFixed(2)} 秒` : null
+}
+
+function questionPerformance(question: InterviewQuestion) {
+  const observability = asRecord(question.decision_metadata.observability)
+  const crag = asRecord(observability.crag)
+  const conductor = asRecord(observability.conductor)
+  const usage = asRecord(conductor.usage)
+  const agentGraph = asRecord(observability.agent_graph)
+  const traceSource = Array.isArray(agentGraph.trace)
+    ? agentGraph.trace
+    : observability.feedback_trace
+  const feedbackTrace = Array.isArray(traceSource)
+    ? traceSource.map(asRecord)
+    : []
+  const critic = feedbackTrace.find((item) => ['answer_critic', 'answer_critic_agent'].includes(String(item.node))) ?? {}
+  const reviser = feedbackTrace.find((item) => ['plan_reviser', 'plan_reviser_agent'].includes(String(item.node))) ?? {}
+  return {
+    total: formatLatency(observability.activation_total_latency_ms ?? observability.total_latency_ms),
+    crag: formatLatency(crag.latency_ms),
+    embedding: formatLatency(crag.embedding_latency_ms),
+    retrieval: formatLatency(crag.knowledge_base_retrieval_latency_ms),
+    reranker: formatLatency(crag.reranker_latency_ms),
+    critic: formatLatency(critic.latency_ms),
+    reviser: formatLatency(reviser.latency_ms),
+    conductor: formatLatency(conductor.latency_ms),
+    tokens: typeof usage.total_tokens === 'number' ? usage.total_tokens : null,
+    source: typeof conductor.source === 'string' ? conductor.source : null,
+  }
+}
 
 function InterviewManagementPage() {
   const navigate = useNavigate()
@@ -96,11 +163,13 @@ function InterviewManagementPage() {
   const [editingCandidate, setEditingCandidate] = useState<CandidateProfile | null>(null)
   const [generatingId, setGeneratingId] = useState<string | null>(null)
   const [plan, setPlan] = useState<InterviewPlan | null>(null)
+  const [observabilitySummary, setObservabilitySummary] = useState<InterviewObservability | null>(null)
   const [planLoading, setPlanLoading] = useState(false)
   const [invitationInterview, setInvitationInterview] = useState<InterviewSession | null>(null)
   const [invitations, setInvitations] = useState<InterviewInvitation[]>([])
   const [createdInvitation, setCreatedInvitation] = useState<InterviewInvitationCreated | null>(null)
   const [invitationLoading, setInvitationLoading] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
 
   const loadData = async () => {
     if (!workspace) return
@@ -132,13 +201,14 @@ function InterviewManagementPage() {
   useEffect(() => { void loadData() }, [workspace?.id])
 
   const hasPlanningSession = interviews.some((item) => item.status === 'PLANNING')
+  const hasActiveInterview = interviews.some((item) => item.status === 'IN_PROGRESS')
   useEffect(() => {
-    if (!hasPlanningSession || !workspace) return
+    if ((!hasPlanningSession && !hasActiveInterview) || !workspace) return
     const timer = window.setInterval(() => {
       getInterviewSessions(workspace.id).then(setInterviews).catch(() => undefined)
     }, 3000)
     return () => window.clearInterval(timer)
-  }, [hasPlanningSession, workspace?.id])
+  }, [hasPlanningSession, hasActiveInterview, workspace?.id])
 
   const closeModal = () => {
     setModal(null)
@@ -278,11 +348,36 @@ function InterviewManagementPage() {
     }
   }
 
+  const cancelPlanGeneration = (item: InterviewSession) => {
+    if (!workspace) return
+    Modal.confirm({
+      title: '取消生成面试计划？',
+      content: '取消后当前计划会标记为失败，可以重新生成。',
+      okText: '取消生成',
+      okButtonProps: { danger: true },
+      cancelText: '继续等待',
+      onOk: async () => {
+        try {
+          await cancelInterviewPlan(workspace.id, item.id)
+          message.success('已取消计划生成')
+          await loadData()
+        } catch (error) {
+          message.error(getApiErrorMessage(error, '取消计划失败'))
+        }
+      },
+    })
+  }
+
   const viewPlan = async (item: InterviewSession) => {
     if (!workspace) return
     setPlanLoading(true)
     try {
-      setPlan(await getInterviewPlan(workspace.id, item.id))
+      const [interviewPlan, observability] = await Promise.all([
+        getInterviewPlan(workspace.id, item.id),
+        getInterviewObservability(workspace.id, item.id),
+      ])
+      setPlan(interviewPlan)
+      setObservabilitySummary(observability)
     } catch (error) {
       message.error(getApiErrorMessage(error, '面试计划加载失败'))
     } finally {
@@ -292,23 +387,6 @@ function InterviewManagementPage() {
 
   const openInvitationManager = async (item: InterviewSession) => {
     if (!workspace) return
-    if (item.application_id) {
-      Modal.confirm({
-        title: '通过站内消息发送面试邀请？',
-        content: '候选人登录后可以从消息中心直接进入本场面试。',
-        okText: '发送邀请',
-        cancelText: '取消',
-        onOk: async () => {
-          try {
-            await sendPlatformInterviewInvitation(workspace.id, item.application_id!, item.id)
-            message.success('面试邀请已发送到候选人消息中心')
-          } catch (error) {
-            message.error(getApiErrorMessage(error, '面试邀请发送失败'))
-          }
-        },
-      })
-      return
-    }
     const candidate = candidates.find((candidateItem) => candidateItem.id === item.candidate_profile_id)
     setInvitationInterview(item)
     setCreatedInvitation(null)
@@ -322,6 +400,23 @@ function InterviewManagementPage() {
       setInvitations(await getInterviewInvitations(workspace.id, item.id))
     } catch (error) {
       message.error(getApiErrorMessage(error, '面试邀请加载失败'))
+    } finally {
+      setInvitationLoading(false)
+    }
+  }
+
+  const sendAccountInvitation = async () => {
+    if (!workspace || !invitationInterview?.application_id) return
+    setInvitationLoading(true)
+    try {
+      await sendPlatformInterviewInvitation(
+        workspace.id,
+        invitationInterview.application_id,
+        invitationInterview.id,
+      )
+      message.success('面试邀请已发送到候选人消息中心')
+    } catch (error) {
+      message.error(getApiErrorMessage(error, '面试邀请发送失败'))
     } finally {
       setInvitationLoading(false)
     }
@@ -382,7 +477,23 @@ function InterviewManagementPage() {
       : (personal ? '创建模拟面试' : '创建面试')
 
   const positionKnowledgeBases = knowledgeBases.filter((item) => item.purpose === 'JOB_SPECIFIC')
-  const personalReferenceKnowledgeBases = knowledgeBases.filter((item) => item.purpose === 'PERSONAL_LEARNING')
+  const referenceKnowledgeBases = knowledgeBases.filter((item) => item.purpose !== 'RESUME')
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase()
+  const filteredInterviews = interviews.filter((item) => (
+    !normalizedSearchQuery
+    || [item.job_title, item.candidate_name, item.status, item.mode]
+      .some((value) => value?.toLowerCase().includes(normalizedSearchQuery))
+  ))
+  const filteredPositions = positions.filter((item) => (
+    !normalizedSearchQuery
+    || [item.title, item.department, item.status]
+      .some((value) => value?.toLowerCase().includes(normalizedSearchQuery))
+  ))
+  const filteredCandidates = candidates.filter((item) => (
+    !normalizedSearchQuery
+    || [item.full_name, item.email, item.source, item.status]
+      .some((value) => value?.toLowerCase().includes(normalizedSearchQuery))
+  ))
 
   return (
     <main className="dashboard-page">
@@ -396,7 +507,7 @@ function InterviewManagementPage() {
               <Typography.Title level={2}>{personal ? '模拟面试' : '面试管理'}</Typography.Title>
               <Typography.Paragraph type="secondary">{interviews.length} 场面试 · {positions.length} 个岗位 · {candidates.length} 名候选人</Typography.Paragraph>
             </div>
-            {canWrite && (
+            {canWrite && !(activeTab === 'interviews' && !personal) && (
               <Button
                 type="primary"
                 size="large"
@@ -408,20 +519,24 @@ function InterviewManagementPage() {
           </div>
 
           <section className="content-panel management-panel">
+            <div className="list-toolbar">
+              <Input allowClear prefix={<SearchOutlined />} value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="搜索岗位、候选人或状态" className="list-search" />
+            </div>
             <Tabs
               activeKey={activeTab}
               onChange={(key) => setActiveTab(key as ManagementTab)}
               items={[
-                { key: 'interviews', label: '面试会话', children: interviews.length === 0 && !loading ? <Empty description="暂无面试" /> : <Table<InterviewSession> rowKey="id" loading={loading} dataSource={interviews} pagination={false} scroll={{ x: 760 }} columns={[
+                { key: 'interviews', label: '面试会话', children: filteredInterviews.length === 0 && !loading ? <Empty description="暂无面试" /> : <Table<InterviewSession> rowKey="id" loading={loading} dataSource={filteredInterviews} pagination={false} scroll={{ x: 760 }} columns={[
                   { title: '岗位', dataIndex: 'job_title', key: 'job' },
                   { title: '候选人', dataIndex: 'candidate_name', key: 'candidate' },
                   { title: '模式', dataIndex: 'mode', key: 'mode', render: (value) => <Tag>{value === 'MOCK' ? '模拟面试' : '企业面试'}</Tag> },
                   { title: '状态', dataIndex: 'status', key: 'status', render: (value) => <Tag color={statusColors[value]}>{value}</Tag> },
+                  { title: '进度', key: 'progress', width: 120, render: (_: unknown, item: InterviewSession) => item.status === 'IN_PROGRESS' ? `${item.current_question_order} / ${Number(item.configuration.max_question_count ?? 10)}` : '-' },
                   { title: '创建时间', dataIndex: 'created_at', key: 'created', render: (value) => new Date(value).toLocaleString('zh-CN') },
                   { title: '操作', key: 'actions', width: 190, render: (_: unknown, item: InterviewSession) => <Space>
                     {canPlan && item.status === 'DRAFT' && <Tooltip title="生成面试计划"><Button type="text" icon={<FileAddOutlined />} loading={generatingId === item.id} onClick={() => generatePlan(item)} aria-label="生成面试计划" /></Tooltip>}
                     {canPlan && item.status === 'FAILED' && <Button size="small" icon={<FileAddOutlined />} loading={generatingId === item.id} onClick={() => generatePlan(item)}>重新生成计划</Button>}
-                    {item.status === 'PLANNING' && <Button type="text" loading disabled>生成中/自动重试</Button>}
+                    {canPlan && item.status === 'PLANNING' && <Button type="text" danger icon={<StopOutlined />} onClick={() => cancelPlanGeneration(item)}>取消生成</Button>}
                     {personal && canPlan && ['READY', 'IN_PROGRESS'].includes(item.status) && <Tooltip title={item.status === 'READY' ? '开始面试' : '继续面试'}><Button type="text" icon={<PlayCircleOutlined />} onClick={() => navigate(`/candidate/interviews/${item.id}/run`)} aria-label={item.status === 'READY' ? '开始面试' : '继续面试'} /></Tooltip>}
                     {item.status === 'COMPLETED' && <Button type="text" icon={<FileDoneOutlined />} onClick={() => navigate(`${personal ? '/candidate' : '/enterprise'}/interviews/${item.id}/report`)} aria-label="查看评估报告" />}
                     {['READY', 'IN_PROGRESS', 'COMPLETED', 'FAILED'].includes(item.status) && <Button type="text" icon={<EyeOutlined />} loading={planLoading} onClick={() => viewPlan(item)} aria-label="查看面试计划" />}
@@ -429,14 +544,14 @@ function InterviewManagementPage() {
                     {canWrite && <Tooltip title="删除面试"><Button type="text" danger icon={<DeleteOutlined />} onClick={() => confirmDelete(`删除“${item.job_title}”面试？`, () => deleteInterviewSession(workspace!.id, item.id), ['PLANNING', 'IN_PROGRESS'].includes(item.status) ? '该面试正在处理或作答中，删除后会立即终止，并清理计划、题目、回答、评估及邀请记录。' : '将同时清理该面试的计划、题目、回答、评估及邀请记录，此操作不可恢复。')} aria-label="删除面试" /></Tooltip>}
                   </Space> },
                 ]} /> },
-                { key: 'positions', label: '岗位', children: positions.length === 0 && !loading ? <Empty description="暂无岗位" /> : <Table<JobPosition> rowKey="id" loading={loading} dataSource={positions} pagination={false} columns={[
+                { key: 'positions', label: '岗位', children: filteredPositions.length === 0 && !loading ? <Empty description="暂无岗位" /> : <Table<JobPosition> rowKey="id" loading={loading} dataSource={filteredPositions} pagination={false} columns={[
                   { title: '岗位名称', dataIndex: 'title', key: 'title' },
                   { title: '部门', dataIndex: 'department', key: 'department', render: (value) => value || '-' },
                   { title: '状态', dataIndex: 'status', key: 'status', render: (value) => <Tag color={statusColors[value]}>{value}</Tag> },
                   { title: '创建时间', dataIndex: 'created_at', key: 'created', render: (value) => new Date(value).toLocaleDateString('zh-CN') },
                   ...(canWrite ? [{ title: '操作', key: 'actions', width: 110, render: (_: unknown, item: JobPosition) => <Space><Button type="text" icon={<EditOutlined />} onClick={() => openPositionEditor(item)} aria-label="编辑岗位" /><Button type="text" danger icon={<DeleteOutlined />} onClick={() => confirmDelete(`删除岗位“${item.title}”？`, () => deletePosition(workspace!.id, item.id))} aria-label="删除岗位" /></Space> }] : []),
                 ]} /> },
-                { key: 'candidates', label: personal ? '个人档案' : '候选人', children: candidates.length === 0 && !loading ? <Empty description={personal ? '暂无个人档案' : '暂无候选人'} /> : <Table<CandidateProfile> rowKey="id" loading={loading} dataSource={candidates} pagination={false} columns={[
+                { key: 'candidates', label: personal ? '个人档案' : '候选人', children: filteredCandidates.length === 0 && !loading ? <Empty description={personal ? '暂无个人档案' : '暂无候选人'} /> : <Table<CandidateProfile> rowKey="id" loading={loading} dataSource={filteredCandidates} pagination={false} columns={[
                   { title: '姓名', dataIndex: 'full_name', key: 'name' },
                   { title: '邮箱', dataIndex: 'email', key: 'email', render: (value) => value || '-' },
                   { title: '来源', dataIndex: 'source', key: 'source', render: (value) => <Tag>{value === 'PERSONAL_ACCOUNT' ? '个人账号' : '企业录入'}</Tag> },
@@ -496,20 +611,18 @@ function InterviewManagementPage() {
         <Form<InterviewSessionCreateRequest> form={interviewForm} layout="vertical" onFinish={submitInterview} initialValues={{ max_question_count: 10, question_time_limit_minutes: 10 }} requiredMark={false}>
           <Form.Item label="岗位" name="job_position_id" rules={[{ required: true, message: '请选择岗位' }]}><Select options={positions.filter((item) => item.status !== 'CLOSED').map((item) => ({ value: item.id, label: item.title }))} /></Form.Item>
           <Form.Item label="候选人" name="candidate_profile_id" rules={[{ required: true, message: '请选择候选人' }]}><Select options={candidates.filter((item) => item.status === 'ACTIVE').map((item) => ({ value: item.id, label: item.full_name }))} /></Form.Item>
-          {personal && (
-            <Form.Item
-              label="面试参考资料"
-              name="reference_knowledge_base_ids"
-              rules={[{ type: 'array', max: 5, message: '最多选择 5 个知识库' }]}
-            >
-              <Select
-                mode="multiple"
-                maxTagCount="responsive"
-                placeholder={personalReferenceKnowledgeBases.length > 0 ? '选择个人面试资料（可选）' : '暂无个人面试资料知识库'}
-                options={personalReferenceKnowledgeBases.map((item) => ({ value: item.id, label: item.name }))}
-              />
-            </Form.Item>
-          )}
+          <Form.Item
+            label="面试参考知识库"
+            name="reference_knowledge_base_ids"
+            rules={[{ type: 'array', max: 5, message: '最多选择 5 个知识库' }]}
+          >
+            <Select
+              mode="multiple"
+              maxTagCount="responsive"
+              placeholder={referenceKnowledgeBases.length > 0 ? '选择参考知识库（可选）' : '暂无可用的非简历知识库'}
+              options={referenceKnowledgeBases.map((item) => ({ value: item.id, label: `${item.name} · ${knowledgeBasePurposeLabels[item.purpose]}` }))}
+            />
+          </Form.Item>
           <Form.Item label="最大问题数" name="max_question_count" rules={[{ required: true, message: '请设置问题数' }]}>
             <InputNumber min={3} max={20} precision={0} className="full-width-control" />
           </Form.Item>
@@ -526,9 +639,52 @@ function InterviewManagementPage() {
         </Form>
       </Modal>
 
-      <Modal title={`面试蓝图${plan ? ` v${plan.version}` : ''}`} open={plan !== null} onCancel={() => setPlan(null)} footer={null} width={820} destroyOnHidden>
+      <Modal
+        title={`面试蓝图${plan ? ` v${plan.version}` : ''}`}
+        open={plan !== null}
+        onCancel={() => { setPlan(null); setObservabilitySummary(null) }}
+        footer={null}
+        width={980}
+        destroyOnHidden
+      >
         {plan && <Space direction="vertical" size="large" className="plan-view">
           {plan.error_message && <Alert type="error" showIcon message="计划生成失败" description={plan.error_message} />}
+          {observabilitySummary && observabilitySummary.measured_turn_count > 0 && (
+            <section>
+              <Typography.Title level={5}>AI 性能汇总</Typography.Title>
+              <div className="observability-summary-grid">
+                <div><span>已测题目</span><strong>{observabilitySummary.measured_turn_count}</strong></div>
+                <div><span>平均总耗时</span><strong>{formatLatency(observabilitySummary.stage_metrics.TOTAL?.average_latency_ms) ?? '-'}</strong></div>
+                <div><span>P95 总耗时</span><strong>{formatLatency(observabilitySummary.stage_metrics.TOTAL?.p95_latency_ms) ?? '-'}</strong></div>
+                <div><span>Token 总量</span><strong>{observabilitySummary.total_tokens}</strong></div>
+              </div>
+              <Space wrap className="observability-summary-tags">
+                {observabilitySummary.bottleneck_stage && <Tag color="volcano">主要瓶颈 {observabilityStageLabels[observabilitySummary.bottleneck_stage] ?? observabilitySummary.bottleneck_stage}</Tag>}
+                <Tag color={observabilitySummary.fallback_turn_count > 0 ? 'gold' : 'green'}>
+                  降级题目 {observabilitySummary.fallback_turn_count} / {observabilitySummary.measured_turn_count}
+                </Tag>
+                {observabilitySummary.route_counts.query_rewrite > 0 && <Tag>查询改写 {observabilitySummary.route_counts.query_rewrite} 次</Tag>}
+                {observabilitySummary.route_counts.web_search > 0 && <Tag>联网搜索 {observabilitySummary.route_counts.web_search} 次</Tag>}
+                {observabilitySummary.route_counts.grader_local_fast_path > 0 && <Tag color="cyan">本地快速判定 {observabilitySummary.route_counts.grader_local_fast_path} 次</Tag>}
+                {observabilitySummary.route_counts.checkpoint_resume > 0 && <Tag color="purple">断点恢复 {observabilitySummary.route_counts.checkpoint_resume} 次</Tag>}
+                {observabilitySummary.route_counts.paused_for_answer > 0 && <Tag>等待回答 {observabilitySummary.route_counts.paused_for_answer} 次</Tag>}
+                {observabilitySummary.route_counts.ai_queue_wait > 0 && <Tag color="gold">并发排队 {observabilitySummary.route_counts.ai_queue_wait} 次</Tag>}
+              </Space>
+              <List
+                size="small"
+                dataSource={Object.entries(observabilitySummary.stage_metrics).filter(([stage]) => stage !== 'TOTAL')}
+                renderItem={([stage, metrics]) => (
+                  <List.Item>
+                    <span>{observabilityStageLabels[stage] ?? stage}</span>
+                    <Typography.Text type="secondary">
+                      平均 {formatLatency(metrics.average_latency_ms)} · P95 {formatLatency(metrics.p95_latency_ms)} · {metrics.sample_count} 次
+                    </Typography.Text>
+                  </List.Item>
+                )}
+              />
+            </section>
+          )}
+          {!personal && <AgentExecutionTracePanel questions={plan.questions} />}
           <section>
             <Typography.Title level={5}>面试目标</Typography.Title>
             <ul>{plan.objectives.map((objective, index) => <li key={index}>{objective}</li>)}</ul>
@@ -553,6 +709,42 @@ function InterviewManagementPage() {
               )}
             />
           </section>
+          {plan.questions.length > 0 && (
+            <section>
+              <Typography.Title level={5}>已生成题目与 AI 耗时</Typography.Title>
+              <List
+                dataSource={plan.questions}
+                renderItem={(question) => {
+                  const performance = questionPerformance(question)
+                  return (
+                    <List.Item>
+                      <div className="plan-question">
+                        <div className="plan-question-heading">
+                          <strong>{question.order_no}. {question.competency || question.question_type}</strong>
+                          <Space wrap>
+                            <Tag>{question.difficulty}</Tag>
+                            {performance.total && <Tag color="blue">总耗时 {performance.total}</Tag>}
+                          </Space>
+                        </div>
+                        <p>{question.content}</p>
+                        <Space wrap>
+                          {performance.critic && <Tag>Critic {performance.critic}</Tag>}
+                          {performance.reviser && <Tag>Reviser {performance.reviser}</Tag>}
+                          {performance.crag && <Tag>CRAG {performance.crag}</Tag>}
+                          {performance.embedding && <Tag>Embedding {performance.embedding}</Tag>}
+                          {performance.retrieval && <Tag>知识库检索 {performance.retrieval}</Tag>}
+                          {performance.reranker && <Tag>Reranker {performance.reranker}</Tag>}
+                          {performance.conductor && <Tag>Conductor {performance.conductor}</Tag>}
+                          {performance.tokens !== null && <Tag>{performance.tokens} Tokens</Tag>}
+                          {performance.source && performance.source !== 'model' && <Tag color="gold">{performance.source}</Tag>}
+                        </Space>
+                      </div>
+                    </List.Item>
+                  )
+                }}
+              />
+            </section>
+          )}
         </Space>}
       </Modal>
 
@@ -569,7 +761,11 @@ function InterviewManagementPage() {
         width={720}
         destroyOnHidden
       >
-        {invitationInterview?.status === 'READY' && (
+        {invitationInterview?.application_id && invitationInterview.status === 'READY' && (
+          <Button icon={<MailOutlined />} loading={invitationLoading} onClick={sendAccountInvitation}>发送站内邀请</Button>
+        )}
+
+        {invitationInterview && ['READY', 'IN_PROGRESS'].includes(invitationInterview.status) && (
           <Form<InterviewInvitationCreateRequest>
             form={invitationForm}
             layout="vertical"
@@ -588,7 +784,7 @@ function InterviewManagementPage() {
                 <InputNumber min={1} max={20} precision={0} className="full-width-control" />
               </Form.Item>
             </div>
-            <Button type="primary" htmlType="submit" icon={<MailOutlined />} loading={invitationLoading}>创建邀请</Button>
+            <Button type="primary" htmlType="submit" icon={<MailOutlined />} loading={invitationLoading}>创建备用链接</Button>
           </Form>
         )}
 
@@ -630,7 +826,7 @@ function InterviewManagementPage() {
               <List.Item.Meta
                 title={<Space wrap><span>{item.email}</span><Tag color={statusColors[item.status]}>{item.status}</Tag></Space>}
                 description={(
-                  <Space direction="vertical" size="small" className="candidate-invitation-credentials">
+                  <div className="candidate-invitation-credentials candidate-invitation-record-credentials">
                     <Typography.Text type="secondary">验证 {item.access_count}/{item.max_access_count} 次 · 有效期至 {new Date(item.expires_at).toLocaleString('zh-CN')}</Typography.Text>
                     {item.invitation_token && item.access_code ? (
                       <>
@@ -646,7 +842,7 @@ function InterviewManagementPage() {
                         </div>
                       </>
                     ) : <Typography.Text type="warning">旧邀请凭据无法恢复，请撤销后重新创建。</Typography.Text>}
-                  </Space>
+                  </div>
                 )}
               />
             </List.Item>

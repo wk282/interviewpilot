@@ -1,0 +1,19 @@
+{
+  "passed": true,
+  "failures": [],
+  "thresholds": {
+    "minimum_document_characters": 40,
+    "maximum_empty_page_rate": 0.05,
+    "maximum_replacement_character_rate": 0.001,
+    "minimum_ocr_confidence": 0.75
+  },
+  "metrics": {
+    "page_count": 1,
+    "character_count": 1183,
+    "empty_page_count": 0,
+    "empty_page_rate": 0.0,
+    "replacement_character_rate": 0.0,
+    "ocr_page_count": 1,
+    "average_ocr_confidence": 0.944164
+  }
+}

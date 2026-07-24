@@ -40,6 +40,12 @@ import type {
   PublicInterviewInvitation,
 } from '../types/interviewInvitation'
 import { getApiErrorMessage } from '../utils/apiError'
+import {
+  readInterviewAnswerDraft,
+  removeInterviewAnswerDraft,
+  removeInterviewAnswerDrafts,
+  saveInterviewAnswerDraft,
+} from '../utils/interviewAnswerDraft'
 
 const questionTypeLabel: Record<string, string> = {
   INTRODUCTION: '自我介绍',
@@ -85,6 +91,31 @@ function CandidateInterviewInvitationPage() {
   const accessStorageKey = invitation
     ? `interviewpilot:candidate-access:${invitation.invitation_id}`
     : null
+  const draftScopeId = invitation
+    ? `invitation:${invitation.invitation_id}`
+    : null
+  const currentQuestionId = runtime?.current_question?.id ?? null
+
+  useEffect(() => {
+    setAnswer(
+      draftScopeId && currentQuestionId
+        ? readInterviewAnswerDraft(draftScopeId, currentQuestionId)
+        : '',
+    )
+  }, [draftScopeId, currentQuestionId])
+
+  useEffect(() => {
+    if (draftScopeId && runtime?.status === 'COMPLETED') {
+      removeInterviewAnswerDrafts(draftScopeId)
+    }
+  }, [draftScopeId, runtime?.status])
+
+  const updateAnswer = (content: string) => {
+    setAnswer(content)
+    if (draftScopeId && currentQuestionId) {
+      saveInterviewAnswerDraft(draftScopeId, currentQuestionId, content)
+    }
+  }
 
   const loadRuntime = async (
     invitationId: string,
@@ -129,6 +160,22 @@ function CandidateInterviewInvitationPage() {
   }, [token])
 
   useEffect(() => {
+    if (!invitation || unavailableStatusText[invitation.status]) return
+    if (invitation.status === 'COMPLETED' && invitation.decision) return
+    const timer = window.setInterval(() => {
+      getPublicInterviewInvitation(token)
+        .then(setInvitation)
+        .catch(() => undefined)
+      if (accessToken && !actionInFlight.current) {
+        getPublicInterviewRuntime(invitation.invitation_id, accessToken)
+          .then(setRuntime)
+          .catch(() => undefined)
+      }
+    }, 5000)
+    return () => window.clearInterval(timer)
+  }, [token, invitation?.invitation_id, invitation?.status, invitation?.decision, accessToken])
+
+  useEffect(() => {
     const askedAt = runtime?.current_question?.asked_at
     questionStartedAt.current = askedAt ? Date.parse(askedAt) : Date.now()
   }, [runtime?.current_question?.id, runtime?.current_question?.asked_at])
@@ -160,6 +207,9 @@ function CandidateInterviewInvitationPage() {
           accessToken,
         )
           .then((result) => {
+            if (draftScopeId) {
+              removeInterviewAnswerDraft(draftScopeId, question.id)
+            }
             setRuntime(result)
             setAnswer('')
             message.warning('当前问题已超时，已进入下一题')
@@ -176,7 +226,7 @@ function CandidateInterviewInvitationPage() {
     updateCountdown()
     const timer = window.setInterval(updateCountdown, 1000)
     return () => window.clearInterval(timer)
-  }, [runtime?.status, runtime?.current_question?.id, runtime?.current_question?.asked_at, runtime?.question_time_limit_seconds, invitation?.invitation_id, accessToken])
+  }, [runtime?.status, runtime?.current_question?.id, runtime?.current_question?.asked_at, runtime?.question_time_limit_seconds, invitation?.invitation_id, accessToken, draftScopeId])
 
   const verify = async (values: InterviewInvitationVerifyRequest) => {
     if (!invitation) return
@@ -233,6 +283,9 @@ function CandidateInterviewInvitationPage() {
         },
         accessToken,
       )
+      if (draftScopeId) {
+        removeInterviewAnswerDraft(draftScopeId, runtime.current_question.id)
+      }
       setAnswer('')
       setRuntime(result)
       if (result.question_timed_out) message.warning('当前问题已超时，回答未提交')
@@ -263,6 +316,9 @@ function CandidateInterviewInvitationPage() {
             questionId,
             accessToken,
           ))
+          if (draftScopeId) {
+            removeInterviewAnswerDraft(draftScopeId, questionId)
+          }
           setAnswer('')
         } catch (requestError) {
           message.error(getApiErrorMessage(requestError, '问题跳过失败'))
@@ -288,6 +344,7 @@ function CandidateInterviewInvitationPage() {
         setSubmitting(true)
         try {
           setRuntime(await finishPublicInterview(invitation.invitation_id, accessToken))
+          if (draftScopeId) removeInterviewAnswerDrafts(draftScopeId)
           setAnswer('')
           if (accessStorageKey) sessionStorage.removeItem(accessStorageKey)
         } catch (requestError) {
@@ -316,7 +373,9 @@ function CandidateInterviewInvitationPage() {
       ? '恭喜，你已通过本次面试'
       : invitation.decision === 'REJECTED'
         ? '很遗憾，你未通过本次面试'
-        : '面试已完成，结果待企业公布'
+        : invitation.evaluation_status === 'PENDING' || invitation.evaluation_status === 'GENERATING'
+          ? '面试已完成，正在生成评估'
+          : '面试已完成，结果待企业公布'
     : unavailableStatusText[invitation.status]
   const progress = runtime?.max_question_count
     ? Math.round((runtime.completed_question_count / runtime.max_question_count) * 100)
@@ -388,8 +447,16 @@ function CandidateInterviewInvitationPage() {
         ) : runtime.status === 'COMPLETED' ? (
           <section className="candidate-interview-surface candidate-interview-result">
             <CheckCircleOutlined />
-            <Typography.Title level={4}>回答已提交</Typography.Title>
-            <Typography.Paragraph type="secondary">企业将根据本次面试生成评估结果，你可以关闭此页面。</Typography.Paragraph>
+            <Typography.Title level={4}>
+              {runtime.decision === 'HIRED'
+                ? '恭喜，你已通过本次面试'
+                : runtime.decision === 'REJECTED'
+                  ? '很遗憾，你未通过本次面试'
+                  : runtime.evaluation_status === 'PENDING' || runtime.evaluation_status === 'GENERATING'
+                    ? '正在生成面试评估'
+                    : '回答已提交，结果待企业公布'}
+            </Typography.Title>
+            {runtime.decided_at && <Typography.Paragraph type="secondary">结果公布时间：{new Date(runtime.decided_at).toLocaleString('zh-CN')}</Typography.Paragraph>}
           </section>
         ) : runtime.status === 'IN_PROGRESS' && runtime.current_question ? (
           <section className="candidate-interview-surface">
@@ -416,7 +483,7 @@ function CandidateInterviewInvitationPage() {
             <div className="interview-answer-area">
               <Input.TextArea
                 value={answer}
-                onChange={(event) => setAnswer(event.target.value)}
+                onChange={(event) => updateAnswer(event.target.value)}
                 autoSize={{ minRows: 8, maxRows: 16 }}
                 maxLength={20000}
                 showCount

@@ -1,0 +1,315 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="1800" viewBox="0 0 2400 1800">
+  <defs>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#102a25" flood-opacity="0.10"/>
+    </filter>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#50635e"/>
+    </marker>
+    <marker id="arrowGreen" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#087f5b"/>
+    </marker>
+    <style>
+      .bg { fill: #f5f7f6; }
+      .band { fill: #ffffff; stroke: #d9e1de; stroke-width: 2; }
+      .card { fill: #ffffff; stroke: #cfd9d5; stroke-width: 2; filter: url(#shadow); }
+      .card-green { fill: #eef8f4; stroke: #8bc8b3; stroke-width: 2; }
+      .card-blue { fill: #eef4fb; stroke: #9bb8dc; stroke-width: 2; }
+      .card-amber { fill: #fff7e8; stroke: #e4bf78; stroke-width: 2; }
+      .card-red { fill: #fff1f1; stroke: #dfa0a3; stroke-width: 2; }
+      .card-gray { fill: #f7f8f8; stroke: #cfd6d4; stroke-width: 2; }
+      .title { font: 700 40px "Microsoft YaHei", "Noto Sans SC", sans-serif; fill: #12352d; letter-spacing: 0; }
+      .subtitle { font: 400 18px "Microsoft YaHei", "Noto Sans SC", sans-serif; fill: #60736d; letter-spacing: 0; }
+      .band-title { font: 700 23px "Microsoft YaHei", "Noto Sans SC", sans-serif; fill: #173f36; letter-spacing: 0; }
+      .box-title { font: 700 19px "Microsoft YaHei", "Noto Sans SC", sans-serif; fill: #173f36; letter-spacing: 0; }
+      .box-title-blue { font: 700 19px "Microsoft YaHei", "Noto Sans SC", sans-serif; fill: #244f83; letter-spacing: 0; }
+      .box-title-amber { font: 700 19px "Microsoft YaHei", "Noto Sans SC", sans-serif; fill: #8b5a0a; letter-spacing: 0; }
+      .box-title-red { font: 700 19px "Microsoft YaHei", "Noto Sans SC", sans-serif; fill: #8b292e; letter-spacing: 0; }
+      .body { font: 400 15px "Microsoft YaHei", "Noto Sans SC", sans-serif; fill: #40534e; letter-spacing: 0; }
+      .small { font: 400 13px "Microsoft YaHei", "Noto Sans SC", sans-serif; fill: #61716d; letter-spacing: 0; }
+      .tiny { font: 400 12px "Microsoft YaHei", "Noto Sans SC", sans-serif; fill: #667772; letter-spacing: 0; }
+      .chip { fill: #e8f2ef; stroke: #b3cbc3; stroke-width: 1.5; }
+      .chip-blue { fill: #e7eff8; stroke: #b0c4dc; stroke-width: 1.5; }
+      .chip-amber { fill: #fff3d9; stroke: #dfc389; stroke-width: 1.5; }
+      .chip-text { font: 600 13px "Microsoft YaHei", "Noto Sans SC", sans-serif; fill: #315b50; letter-spacing: 0; }
+      .line { fill: none; stroke: #50635e; stroke-width: 2.5; marker-end: url(#arrow); }
+      .line-green { fill: none; stroke: #087f5b; stroke-width: 3; marker-end: url(#arrowGreen); }
+      .line-dashed { fill: none; stroke: #73837f; stroke-width: 2; stroke-dasharray: 8 7; marker-end: url(#arrow); }
+      .divider { stroke: #d9e1de; stroke-width: 2; }
+      .stage { fill: #087f5b; }
+      .stage-text { font: 700 15px "Microsoft YaHei", "Noto Sans SC", sans-serif; fill: #ffffff; letter-spacing: 0; }
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="2400" height="1800"/>
+
+  <text class="title" x="80" y="68">InterviewPilot 完整业务与 Agentic CRAG 工作链路</text>
+  <text class="subtitle" x="80" y="103">基于 LangGraph 多智能体协作的简历驱动自纠错技术面试平台 · 个人模拟 + 企业招聘双端</text>
+  <rect x="2038" y="43" width="282" height="48" rx="6" fill="#12352d"/>
+  <text x="2179" y="74" text-anchor="middle" style="font:700 15px 'Microsoft YaHei','Noto Sans SC',sans-serif;fill:#ffffff">业务状态为主 · Checkpoint 可恢复</text>
+
+  <!-- Stage 1: entry -->
+  <rect class="band" x="80" y="130" width="2240" height="165" rx="8"/>
+  <rect class="stage" x="80" y="130" width="55" height="165" rx="8"/>
+  <text class="stage-text" x="107" y="202" text-anchor="middle">01</text>
+  <text class="stage-text" x="107" y="225" text-anchor="middle">入口</text>
+
+  <rect class="card-green" x="175" y="165" width="480" height="96" rx="8"/>
+  <text class="box-title" x="205" y="198">个人候选人</text>
+  <text class="body" x="205" y="226">注册登录 · 简历管理 · 模拟面试 · 岗位投递</text>
+  <text class="small" x="205" y="249">查看邀请、面试结果与个人评估报告</text>
+
+  <rect class="card-blue" x="730" y="165" width="480" height="96" rx="8"/>
+  <text class="box-title-blue" x="760" y="198">企业 HR / 面试官</text>
+  <text class="body" x="760" y="226">企业工作空间 · 岗位 · 申请人 · 邀请面试</text>
+  <text class="small" x="760" y="249">查看评估、录用或不通过并发送站内消息</text>
+
+  <rect class="card-amber" x="1285" y="165" width="480" height="96" rx="8"/>
+  <text class="box-title-amber" x="1315" y="198">外部邀请候选人</text>
+  <text class="body" x="1315" y="226">邀请链接 + 访问码进入面试</text>
+  <text class="small" x="1315" y="249">无需企业后台权限，完成后可查看面试结果</text>
+
+  <rect class="card-gray" x="1840" y="165" width="430" height="96" rx="8"/>
+  <text class="box-title" x="1870" y="198">React + TypeScript 前端</text>
+  <text class="body" x="1870" y="226">Vite · Ant Design · 角色化路由</text>
+  <text class="small" x="1870" y="249">本地、企业和外部邀请三套交互入口</text>
+
+  <!-- Stage 2: API -->
+  <rect class="band" x="80" y="320" width="2240" height="170" rx="8"/>
+  <rect class="stage" x="80" y="320" width="55" height="170" rx="8"/>
+  <text class="stage-text" x="107" y="390" text-anchor="middle">02</text>
+  <text class="stage-text" x="107" y="413" text-anchor="middle">接入</text>
+  <path class="line" d="M415 261 L415 338"/>
+  <path class="line" d="M970 261 L970 338"/>
+  <path class="line" d="M1525 261 L1525 338"/>
+  <path class="line" d="M2055 261 L2055 338"/>
+
+  <rect class="card" x="175" y="350" width="2095" height="108" rx="8"/>
+  <text class="band-title" x="210" y="383">FastAPI 统一业务 API</text>
+  <text class="body" x="210" y="412">JWT认证 · 账号类型 · RBAC角色权限 · workspace_id 强制隔离 · Pydantic结构校验 · 幂等回答提交</text>
+  <rect class="chip" x="210" y="427" width="205" height="27" rx="5"/><text class="chip-text" x="312" y="446" text-anchor="middle">认证 / 工作空间</text>
+  <rect class="chip" x="432" y="427" width="205" height="27" rx="5"/><text class="chip-text" x="534" y="446" text-anchor="middle">知识库 / 文档</text>
+  <rect class="chip-blue" x="654" y="427" width="205" height="27" rx="5"/><text class="chip-text" x="756" y="446" text-anchor="middle">岗位 / 招聘投递</text>
+  <rect class="chip-blue" x="876" y="427" width="205" height="27" rx="5"/><text class="chip-text" x="978" y="446" text-anchor="middle">面试 / 邀请</text>
+  <rect class="chip-amber" x="1098" y="427" width="205" height="27" rx="5"/><text class="chip-text" x="1200" y="446" text-anchor="middle">报告 / 质量审计</text>
+  <rect class="chip" x="1320" y="427" width="205" height="27" rx="5"/><text class="chip-text" x="1422" y="446" text-anchor="middle">消息 / 结果通知</text>
+  <rect class="chip" x="1542" y="427" width="300" height="27" rx="5"/><text class="chip-text" x="1692" y="446" text-anchor="middle">错误恢复 / Checkpoint API</text>
+
+  <!-- Stage 3: preparation -->
+  <rect class="band" x="80" y="515" width="2240" height="350" rx="8"/>
+  <rect class="stage" x="80" y="515" width="55" height="350" rx="8"/>
+  <text class="stage-text" x="107" y="675" text-anchor="middle">03</text>
+  <text class="stage-text" x="107" y="698" text-anchor="middle">准备</text>
+
+  <text class="band-title" x="175" y="553">A. 知识库入库链路</text>
+  <text class="small" x="175" y="577">企业题库、岗位资料、评分规则、技术标准、个人学习资料与简历分别入库</text>
+  <path class="line" d="M1180 580 L1180 836"/>
+
+  <rect class="card-green" x="175" y="605" width="170" height="92" rx="8"/>
+  <text class="box-title" x="260" y="635" text-anchor="middle">文件上传</text>
+  <text class="small" x="260" y="662" text-anchor="middle">PDF / DOCX / MD</text>
+  <text class="tiny" x="260" y="683" text-anchor="middle">哈希去重 · 文档版本</text>
+  <path class="line" d="M345 651 L385 651"/>
+
+  <rect class="card-green" x="385" y="605" width="170" height="92" rx="8"/>
+  <text class="box-title" x="470" y="635" text-anchor="middle">异步解析</text>
+  <text class="small" x="470" y="662" text-anchor="middle">Celery + Redis</text>
+  <text class="tiny" x="470" y="683" text-anchor="middle">校验 · 清洗 · 重试</text>
+  <path class="line" d="M555 651 L595 651"/>
+
+  <rect class="card-green" x="595" y="605" width="170" height="92" rx="8"/>
+  <text class="box-title" x="680" y="635" text-anchor="middle">父子切片</text>
+  <text class="small" x="680" y="662" text-anchor="middle">Parent / Child</text>
+  <text class="tiny" x="680" y="683" text-anchor="middle">Small-to-Big 上下文</text>
+  <path class="line" d="M765 651 L805 651"/>
+
+  <rect class="card-green" x="805" y="605" width="170" height="92" rx="8"/>
+  <text class="box-title" x="890" y="635" text-anchor="middle">Embedding</text>
+  <text class="small" x="890" y="662" text-anchor="middle">1024维向量</text>
+  <text class="tiny" x="890" y="683" text-anchor="middle">失败任务可重新向量化</text>
+  <path class="line" d="M975 651 L1015 651"/>
+
+  <rect class="card-green" x="1015" y="605" width="135" height="92" rx="8"/>
+  <text class="box-title" x="1082" y="635" text-anchor="middle">索引</text>
+  <text class="small" x="1082" y="662" text-anchor="middle">pgvector</text>
+  <text class="tiny" x="1082" y="683" text-anchor="middle">OpenSearch BM25</text>
+
+  <rect class="card-gray" x="175" y="728" width="975" height="93" rx="8"/>
+  <text class="box-title" x="205" y="759">持久化结果</text>
+  <text class="body" x="205" y="787">原始文件存储 + PostgreSQL 文档/版本/任务/切片元数据 + pgvector向量 + OpenSearch倒排索引</text>
+  <text class="small" x="205" y="810">文档删除级联清理切片、向量、任务和BM25索引；失败任务保留可观测记录并支持重试</text>
+
+  <text class="band-title" x="1235" y="553">B. 企业招聘与面试准备链路</text>
+  <text class="small" x="1235" y="577">岗位、简历、知识库和候选人申请最终汇聚为可执行面试会话</text>
+
+  <rect class="card-blue" x="1235" y="605" width="190" height="92" rx="8"/>
+  <text class="box-title-blue" x="1330" y="635" text-anchor="middle">企业创建岗位</text>
+  <text class="small" x="1330" y="662" text-anchor="middle">JD · 能力要求</text>
+  <text class="tiny" x="1330" y="683" text-anchor="middle">绑定可用知识库</text>
+  <path class="line" d="M1425 651 L1460 651"/>
+
+  <rect class="card-green" x="1460" y="605" width="190" height="92" rx="8"/>
+  <text class="box-title" x="1555" y="635" text-anchor="middle">候选人投递</text>
+  <text class="small" x="1555" y="662" text-anchor="middle">选择简历版本</text>
+  <text class="tiny" x="1555" y="683" text-anchor="middle">求职说明 · 信息授权</text>
+  <path class="line" d="M1650 651 L1685 651"/>
+
+  <rect class="card-blue" x="1685" y="605" width="190" height="92" rx="8"/>
+  <text class="box-title-blue" x="1780" y="635" text-anchor="middle">企业查看申请</text>
+  <text class="small" x="1780" y="662" text-anchor="middle">详情 · 简历下载</text>
+  <text class="tiny" x="1780" y="683" text-anchor="middle">筛选并发起面试</text>
+  <path class="line" d="M1875 651 L1910 651"/>
+
+  <rect class="card-amber" x="1910" y="605" width="190" height="92" rx="8"/>
+  <text class="box-title-amber" x="2005" y="635" text-anchor="middle">邀请与消息</text>
+  <text class="small" x="2005" y="662" text-anchor="middle">站内消息 / 外部链接</text>
+  <text class="tiny" x="2005" y="683" text-anchor="middle">访问码 · 有效期</text>
+  <path class="line" d="M2100 651 L2135 651"/>
+
+  <rect class="card-blue" x="2135" y="605" width="135" height="92" rx="8"/>
+  <text class="box-title-blue" x="2202" y="635" text-anchor="middle">面试会话</text>
+  <text class="small" x="2202" y="662" text-anchor="middle">岗位 + 候选人</text>
+  <text class="tiny" x="2202" y="683" text-anchor="middle">题数/时限配置</text>
+
+  <rect class="card-gray" x="1235" y="728" width="1035" height="93" rx="8"/>
+  <text class="box-title" x="1265" y="759">双端业务边界</text>
+  <text class="body" x="1265" y="787">个人端：模拟面试、投递和查看结果　　企业端：岗位、申请人、邀请、评估和录用决策</text>
+  <text class="small" x="1265" y="810">工作空间、知识库、岗位、简历和会话均通过 workspace_id 与角色权限隔离</text>
+
+  <!-- Stage 4: multi-agent -->
+  <rect class="band" x="80" y="890" width="2240" height="500" rx="8"/>
+  <rect class="stage" x="80" y="890" width="55" height="500" rx="8"/>
+  <text class="stage-text" x="107" y="1110" text-anchor="middle">04</text>
+  <text class="stage-text" x="107" y="1133" text-anchor="middle">面试</text>
+  <text class="band-title" x="175" y="930">LangGraph 五 Agent 动态面试主链路</text>
+  <text class="small" x="175" y="955">统一 InterviewState 驱动 PLAN / TURN / EVALUATE 路由；每个 Agent 均有结构化输入输出、边界、超时与执行轨迹</text>
+
+  <rect class="card-blue" x="175" y="985" width="245" height="105" rx="8"/>
+  <text class="box-title-blue" x="297" y="1018" text-anchor="middle">1. Planner Agent</text>
+  <text class="small" x="297" y="1047" text-anchor="middle">岗位 + 简历 + 知识证据</text>
+  <text class="tiny" x="297" y="1071" text-anchor="middle">生成目标、章节和能力蓝图</text>
+  <path class="line-green" d="M420 1037 L475 1037"/>
+
+  <rect class="card-gray" x="475" y="985" width="205" height="105" rx="8"/>
+  <text class="box-title" x="577" y="1018" text-anchor="middle">版本化计划</text>
+  <text class="small" x="577" y="1047" text-anchor="middle">InterviewPlan READY</text>
+  <text class="tiny" x="577" y="1071" text-anchor="middle">Celery异步生成与重试</text>
+  <path class="line-green" d="M680 1037 L735 1037"/>
+
+  <rect class="card-green" x="735" y="985" width="245" height="105" rx="8"/>
+  <text class="box-title" x="857" y="1018" text-anchor="middle">2. Interviewer Agent</text>
+  <text class="small" x="857" y="1047" text-anchor="middle">读取计划、历史与Reviser指导</text>
+  <text class="tiny" x="857" y="1071" text-anchor="middle">每次只生成一道独立问题</text>
+  <path class="line-green" d="M980 1037 L1035 1037"/>
+
+  <!-- CRAG subgraph -->
+  <rect class="card-amber" x="1035" y="975" width="500" height="255" rx="8"/>
+  <text class="box-title-amber" x="1062" y="1008">Agentic CRAG 检索子图</text>
+  <text class="tiny" x="1062" y="1032">检索意图不包含候选人答案，避免重写答案语义</text>
+  <rect class="chip-amber" x="1062" y="1050" width="210" height="42" rx="5"/>
+  <text class="chip-text" x="1167" y="1068" text-anchor="middle">向量 + BM25候选召回</text>
+  <text class="tiny" x="1167" y="1085" text-anchor="middle">Min-Max归一化加权融合</text>
+  <path class="line" d="M1272 1071 L1310 1071"/>
+  <rect class="chip-amber" x="1310" y="1050" width="195" height="42" rx="5"/>
+  <text class="chip-text" x="1407" y="1068" text-anchor="middle">Retrieval Grader</text>
+  <text class="tiny" x="1407" y="1085" text-anchor="middle">充分 / 部分 / 无关</text>
+  <path class="line-green" d="M1407 1092 L1407 1125 L1468 1125"/>
+  <text class="tiny" x="1420" y="1118">充分 → 使用证据</text>
+  <path class="line" d="M1407 1092 L1407 1165 L1310 1165"/>
+  <rect class="chip" x="1062" y="1138" width="210" height="56" rx="5"/>
+  <text class="chip-text" x="1167" y="1159" text-anchor="middle">无关 → Query Rewrite</text>
+  <text class="tiny" x="1167" y="1180" text-anchor="middle">结合technical gaps重新本地检索</text>
+  <rect class="chip-blue" x="1310" y="1138" width="195" height="56" rx="5"/>
+  <text class="chip-text" x="1407" y="1159" text-anchor="middle">部分 → Web Search</text>
+  <text class="tiny" x="1407" y="1180" text-anchor="middle">Tavily可选兜底 · 次数受限</text>
+  <path class="line-dashed" d="M1062 1165 L1020 1165 L1020 1071 L1062 1071"/>
+  <path class="line-green" d="M1535 1037 L1585 1037"/>
+
+  <rect class="card-green" x="1585" y="985" width="205" height="105" rx="8"/>
+  <text class="box-title" x="1687" y="1018" text-anchor="middle">单题输出</text>
+  <text class="small" x="1687" y="1047" text-anchor="middle">恰好一个问号</text>
+  <text class="tiny" x="1687" y="1071" text-anchor="middle">证据ID + 能力点 + 难度</text>
+  <path class="line-green" d="M1790 1037 L1845 1037"/>
+
+  <rect class="card-amber" x="1845" y="975" width="250" height="125" rx="8"/>
+  <text class="box-title-amber" x="1970" y="1008" text-anchor="middle">PostgreSQL Checkpoint</text>
+  <text class="small" x="1970" y="1037" text-anchor="middle">interrupt_before</text>
+  <text class="small" x="1970" y="1059" text-anchor="middle">wait_for_answer</text>
+  <text class="tiny" x="1970" y="1082" text-anchor="middle">HTTP返回，不长期占用连接</text>
+  <path class="line-green" d="M2095 1037 L2140 1037"/>
+
+  <rect class="card-green" x="2140" y="985" width="130" height="125" rx="8"/>
+  <text class="box-title" x="2205" y="1018" text-anchor="middle">候选人</text>
+  <text class="small" x="2205" y="1047" text-anchor="middle">回答 / 跳过</text>
+  <text class="small" x="2205" y="1069" text-anchor="middle">超时自动提交</text>
+  <text class="tiny" x="2205" y="1093" text-anchor="middle">幂等接口</text>
+
+  <path class="line-green" d="M2205 1110 L2205 1282 L1950 1282"/>
+  <rect class="card-red" x="1695" y="1240" width="255" height="105" rx="8"/>
+  <text class="box-title-red" x="1822" y="1273" text-anchor="middle">3. Answer Critic Agent</text>
+  <text class="small" x="1822" y="1302" text-anchor="middle">正确性 · 完整度 · 回答证据</text>
+  <text class="tiny" x="1822" y="1326" text-anchor="middle">仅输出technical knowledge gaps</text>
+  <path class="line-green" d="M1695 1292 L1635 1292"/>
+
+  <rect class="card-blue" x="1360" y="1240" width="275" height="105" rx="8"/>
+  <text class="box-title-blue" x="1497" y="1273" text-anchor="middle">4. Plan Reviser Agent</text>
+  <text class="small" x="1497" y="1302" text-anchor="middle">动作 · 难度 · 能力预算 · 覆盖率</text>
+  <text class="tiny" x="1497" y="1326" text-anchor="middle">保存前后快照，不覆盖原计划</text>
+  <path class="line-green" d="M1360 1292 L1240 1292 L1240 1348 L857 1348 L857 1090"/>
+  <text class="small" x="1015" y="1338">反馈闭环：FOLLOW_UP / SWITCH_TOPIC / 难度调整 / FINISH</text>
+
+  <rect class="card-gray" x="175" y="1140" width="760" height="185" rx="8"/>
+  <text class="box-title" x="205" y="1173">统一 InterviewState 与恢复规则</text>
+  <text class="body" x="205" y="1203">• 业务数据库保存题目、答案、Critic、计划修订和会话状态</text>
+  <text class="body" x="205" y="1232">• Checkpoint只保存工作流恢复状态，不作为业务事实来源</text>
+  <text class="body" x="205" y="1261">• 提交失败可从已保存答案继续；缺失题目可由Checkpoint重建</text>
+  <text class="body" x="205" y="1290">• 每轮记录节点、Prompt版本、模型、Token、耗时、路由与降级原因</text>
+
+  <!-- Stage 5: evaluation -->
+  <rect class="band" x="80" y="1415" width="2240" height="235" rx="8"/>
+  <rect class="stage" x="80" y="1415" width="55" height="235" rx="8"/>
+  <text class="stage-text" x="107" y="1512" text-anchor="middle">05</text>
+  <text class="stage-text" x="107" y="1535" text-anchor="middle">结果</text>
+  <text class="band-title" x="175" y="1454">结束、最终评估与业务闭环</text>
+  <path class="line-dashed" d="M1497 1345 L1497 1468 L385 1468 L385 1495"/>
+
+  <rect class="card-blue" x="175" y="1495" width="330" height="112" rx="8"/>
+  <text class="box-title-blue" x="340" y="1528" text-anchor="middle">5. Final Evaluator Agent</text>
+  <text class="small" x="340" y="1557" text-anchor="middle">逐轮回答 + Critic + 证据链</text>
+  <text class="tiny" x="340" y="1581" text-anchor="middle">五维评分 · 优劣势 · 推荐结论</text>
+  <path class="line-green" d="M505 1551 L565 1551"/>
+
+  <rect class="card-gray" x="565" y="1495" width="330" height="112" rx="8"/>
+  <text class="box-title" x="730" y="1528" text-anchor="middle">评估报告持久化</text>
+  <text class="small" x="730" y="1557" text-anchor="middle">InterviewEvaluation + 引用证据</text>
+  <text class="tiny" x="730" y="1581" text-anchor="middle">Celery失败重试 · 状态可追踪</text>
+  <path class="line-green" d="M895 1551 L955 1551"/>
+
+  <rect class="card-green" x="955" y="1495" width="330" height="112" rx="8"/>
+  <text class="box-title" x="1120" y="1528" text-anchor="middle">报告与质量审计</text>
+  <text class="small" x="1120" y="1557" text-anchor="middle">PDF下载 · 能力维度 · Agent轨迹</text>
+  <text class="tiny" x="1120" y="1581" text-anchor="middle">覆盖率、证据率、降级率等质量门禁</text>
+  <path class="line-green" d="M1285 1551 L1345 1551"/>
+
+  <rect class="card-blue" x="1345" y="1495" width="330" height="112" rx="8"/>
+  <text class="box-title-blue" x="1510" y="1528" text-anchor="middle">企业招聘决策</text>
+  <text class="small" x="1510" y="1557" text-anchor="middle">录用 / 不通过 / 待定</text>
+  <text class="tiny" x="1510" y="1581" text-anchor="middle">结果写入申请并发送平台消息</text>
+  <path class="line-green" d="M1675 1551 L1735 1551"/>
+
+  <rect class="card-green" x="1735" y="1495" width="535" height="112" rx="8"/>
+  <text class="box-title" x="2002" y="1528" text-anchor="middle">候选人结果体验</text>
+  <text class="small" x="2002" y="1557" text-anchor="middle">个人端查看模拟报告 / 站内申请结果 / 外部邀请结果</text>
+  <text class="tiny" x="2002" y="1581" text-anchor="middle">同一评估内核服务个人学习与企业招聘两种场景</text>
+
+  <!-- Stage 6: infrastructure and evaluation -->
+  <rect class="band" x="80" y="1675" width="2240" height="85" rx="8"/>
+  <rect class="stage" x="80" y="1675" width="55" height="85" rx="8"/>
+  <text class="stage-text" x="107" y="1711" text-anchor="middle">06</text>
+  <text class="stage-text" x="107" y="1734" text-anchor="middle">底座</text>
+  <text class="box-title" x="175" y="1710">数据与运行基础设施</text>
+  <text class="small" x="175" y="1739">PostgreSQL + pgvector　|　LangGraph PostgreSQL Checkpointer　|　Redis + Celery　|　OpenSearch BM25　|　LLM / Embedding / Reranker　|　Tavily</text>
+  <line class="divider" x1="1390" y1="1692" x2="1390" y2="1745"/>
+  <text class="box-title-blue" x="1430" y="1710">离线评测与回归</text>
+  <text class="small" x="1430" y="1739">多检索Profile对比 · Recall@K / MRR / NDCG · CRAG重写与Web收益 · 面试业务质量门禁</text>
+</svg>

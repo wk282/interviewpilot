@@ -5,19 +5,29 @@ from sqlalchemy import select
 
 from app.db.models.interview import CandidateProfile, InterviewEvaluation, InterviewPlan, InterviewSession, JobPosition
 from app.db.models.user import AppUser
+from app.core.config import settings
+from app.core.logger import logger
 from app.db.session import AsyncSessionFactory, engine
-from app.services.interview_planner import generate_plan
-from app.services.interview_evaluator import evaluate_interview
+from app.services.interview_agent_graph import (
+    run_final_evaluator_agent_graph,
+    run_planner_agent_graph,
+)
+from app.services.interview_quality_audit import generate_interview_quality_audit
 from app.services.evaluation_lifecycle import notify_enterprise_evaluation
 from app.workers.celery_app import celery_app
 
 
+class PlannerExecutionDeadlineExceeded(Exception):
+    pass
+
+
 async def process_plan(plan_id: uuid.UUID) -> None:
+    logger.info(f"Planner task started: plan_id={plan_id}")
     async with AsyncSessionFactory() as session:
         plan = await session.scalar(
-            select(InterviewPlan).where(InterviewPlan.id == plan_id).with_for_update()
+            select(InterviewPlan).where(InterviewPlan.id == plan_id)
         )
-        if plan is None or plan.status == "READY":
+        if plan is None or plan.status != "DRAFT":
             return
         interview = await session.get(InterviewSession, plan.interview_session_id)
         position = await session.get(JobPosition, interview.job_position_id) if interview else None
@@ -35,7 +45,18 @@ async def process_plan(plan_id: uuid.UUID) -> None:
             await session.commit()
             return
 
-        await generate_plan(session, plan, interview, position, candidate, user)
+        try:
+            logger.info(f"Planner graph started: plan_id={plan_id}")
+            await asyncio.wait_for(
+                run_planner_agent_graph(session, plan, interview, user),
+                timeout=settings.INTERVIEW_PLAN_TIMEOUT_SECONDS,
+            )
+            logger.info(f"Planner graph completed: plan_id={plan_id}")
+        except asyncio.TimeoutError as error:
+            logger.error(f"Planner graph timed out: plan_id={plan_id}")
+            raise PlannerExecutionDeadlineExceeded(
+                f"Interview planning exceeded {settings.INTERVIEW_PLAN_TIMEOUT_SECONDS} seconds"
+            ) from error
 
 
 async def mark_plan_failed(plan_id: uuid.UUID, error: Exception) -> None:
@@ -55,6 +76,8 @@ async def mark_plan_failed(plan_id: uuid.UUID, error: Exception) -> None:
 
 
 def is_retryable_model_error(error: Exception) -> bool:
+    if isinstance(error, PlannerExecutionDeadlineExceeded):
+        return False
     status_code = getattr(error, "status_code", None)
     if status_code in {408, 409, 429} or (
         isinstance(status_code, int) and status_code >= 500
@@ -120,6 +143,10 @@ async def process_evaluation(evaluation_id: uuid.UUID) -> None:
         )
         if evaluation.status == "COMPLETED":
             if interview is not None:
+                await generate_interview_quality_audit(
+                    session, interview, evaluation
+                )
+                await session.commit()
                 await notify_enterprise_evaluation(session, evaluation, interview)
             return
         if interview is None or interview.status != "COMPLETED":
@@ -134,7 +161,7 @@ async def process_evaluation(evaluation_id: uuid.UUID) -> None:
         evaluation.error_message = None
         await session.commit()
         try:
-            await evaluate_interview(session, evaluation, interview)
+            await run_final_evaluator_agent_graph(session, evaluation, interview)
         except Exception as error:
             await session.rollback()
             evaluation = await session.get(InterviewEvaluation, evaluation_id)
@@ -145,6 +172,8 @@ async def process_evaluation(evaluation_id: uuid.UUID) -> None:
             raise
         evaluation = await session.get(InterviewEvaluation, evaluation_id)
         if evaluation is not None:
+            await generate_interview_quality_audit(session, interview, evaluation)
+            await session.commit()
             await notify_enterprise_evaluation(session, evaluation, interview)
 
 

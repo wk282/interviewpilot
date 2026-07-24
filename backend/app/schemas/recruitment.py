@@ -48,6 +48,8 @@ class JobApplicationResponse(BaseModel):
     resume_status: str | None
     interview_session_id: uuid.UUID | None
     interview_status: str | None
+    interview_current_question_order: int | None
+    interview_max_question_count: int | None
     thread_id: uuid.UUID
     submitted_at: datetime
     reviewed_at: datetime | None
@@ -69,6 +71,7 @@ class ApplicationInterviewCreateRequest(BaseModel):
     max_question_count: int = Field(default=10, ge=3, le=20)
     question_time_limit_minutes: int = Field(default=10, ge=0, le=60)
     scheduled_at: datetime | None = None
+    reference_knowledge_base_ids: list[uuid.UUID] = Field(default_factory=list, max_length=5)
 
 
 class InterviewDecisionRequest(BaseModel):

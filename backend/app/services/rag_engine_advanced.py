@@ -15,6 +15,7 @@ from app.core.logger import logger
 from app.services.vector_store import ChromaDBManager
 from app.services.tools import web_search, WEB_SEARCH_TOOL_SCHEMA
 from app.services.reranker import ZhipuReranker
+from app.services.ai_concurrency import ai_concurrency_slot
 
 # ==========================================
 # 高阶版 AgentState，新增 search_query 字段
@@ -97,11 +98,15 @@ class AgentService:
 }}
 请不要返回任何非 JSON 格式的文字，不要用 markdown 代码块包裹。
 内容：{user_input[:2000]}"""
-            response = await self.llm_client.chat.completions.create(
-                model=settings.LLM_MINI_MODEL,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.1
-            )
+            async with ai_concurrency_slot(
+                "legacy_resume_rewrite",
+                settings.LLM_MINI_MODEL,
+            ):
+                response = await self.llm_client.chat.completions.create(
+                    model=settings.LLM_MINI_MODEL,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.1
+                )
             raw_response = response.choices[0].message.content or "{}"
             
             import re
@@ -130,11 +135,15 @@ class AgentService:
         else:
             logger.info(f"📍 [Node: rewrite] 正在对口语化提问进行高质量改写...")
             prompt = f"你是一个专业的搜索引擎查询词优化专家。请把以下用户的口语化提问，改写为极其精准、包含专业术语的搜索关键词（不要超过20个字）。\n\n用户提问：{user_input}\n\n直接返回改写后的关键词，不要有任何废话："
-            response = await self.llm_client.chat.completions.create(
-                model=settings.LLM_MINI_MODEL,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.1
-            )
+            async with ai_concurrency_slot(
+                "legacy_query_rewrite",
+                settings.LLM_MINI_MODEL,
+            ):
+                response = await self.llm_client.chat.completions.create(
+                    model=settings.LLM_MINI_MODEL,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.1
+                )
             search_query = response.choices[0].message.content or user_input
             
         logger.info(f"📍 [Node: rewrite] 改写结果: '{search_query}'")
@@ -157,7 +166,13 @@ class AgentService:
             rerank_query = user_input
         
         # 我们多捞一点子节点（比如 top 6），为了能拼出几个完整的大节点
-        chunks = await asyncio.to_thread(self.search, search_query, rerank_query, 6)
+        async with ai_concurrency_slot(
+            "legacy_retrieval_and_rerank",
+            settings.RERANK_MODEL_NAME,
+        ):
+            chunks = await asyncio.to_thread(
+                self.search, search_query, rerank_query, 6
+            )
         
         # 【核心魔法：Small-to-Big 还原逻辑，提升 Faithfulness】
         final_parent_chunks = []
@@ -228,7 +243,8 @@ class AgentService:
         if not self.is_eval_mode:
             kwargs["tools"] = [WEB_SEARCH_TOOL_SCHEMA]
             
-        response = await self.llm_client.chat.completions.create(**kwargs)  # type: ignore
+        async with ai_concurrency_slot("legacy_chat", self.llm_model):
+            response = await self.llm_client.chat.completions.create(**kwargs)  # type: ignore
         
         message = response.choices[0].message
         return {"messages": [message.model_dump(exclude_unset=True)]}

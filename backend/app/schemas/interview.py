@@ -131,6 +131,7 @@ class InterviewQuestionResponse(BaseModel):
     max_score: float
     expected_points: list
     source_evidence: list
+    decision_metadata: dict
 
 
 class InterviewPlanResponse(BaseModel):
@@ -149,6 +150,27 @@ class InterviewPlanResponse(BaseModel):
     questions: list[InterviewQuestionResponse]
 
 
+class AIStageMetricsResponse(BaseModel):
+    sample_count: int
+    average_latency_ms: int
+    p50_latency_ms: int
+    p95_latency_ms: int
+    max_latency_ms: int
+
+
+class InterviewObservabilityResponse(BaseModel):
+    interview_id: uuid.UUID
+    question_count: int
+    measured_turn_count: int
+    total_tokens: int
+    fallback_event_count: int
+    fallback_turn_count: int
+    fallback_turn_rate: float
+    bottleneck_stage: str | None
+    stage_metrics: dict[str, AIStageMetricsResponse]
+    route_counts: dict[str, int]
+
+
 class InterviewRuntimeQuestionResponse(BaseModel):
     id: uuid.UUID
     order_no: int
@@ -158,6 +180,43 @@ class InterviewRuntimeQuestionResponse(BaseModel):
     difficulty: str
     generated_by: str
     asked_at: datetime | None
+
+
+class InterviewTurnCritiqueResponse(BaseModel):
+    id: uuid.UUID
+    interview_question_id: uuid.UUID
+    score: float
+    strengths: list[str]
+    knowledge_gaps: list[str]
+    answer_evidence: list[str]
+    next_action: str
+    difficulty_delta: int
+    confidence: float
+    reason: str
+    decision_source: str
+    model_name: str | None
+    prompt_version: str
+    created_at: datetime
+
+
+class InterviewPlanRevisionResponse(BaseModel):
+    id: uuid.UUID
+    source_critique_id: uuid.UUID
+    version: int
+    action: str
+    target_competency: str | None
+    target_difficulty: str | None
+    covered_competencies: list[str]
+    priority_competencies: list[str]
+    knowledge_gaps: list[str]
+    rationale: str
+    workflow_trace: list[dict]
+    before_snapshot: dict
+    after_snapshot: dict
+    change_set: dict
+    remaining_question_budget: int
+    competency_budget: dict[str, int]
+    created_at: datetime
 
 
 class InterviewRuntimeResponse(BaseModel):
@@ -172,6 +231,11 @@ class InterviewRuntimeResponse(BaseModel):
     completed_at: datetime | None
     follow_up_generated: bool = False
     question_timed_out: bool = False
+    last_turn_feedback: InterviewTurnCritiqueResponse | None = None
+    adaptive_plan_version: int | None = None
+    evaluation_status: str | None = None
+    decision: str | None = None
+    decided_at: datetime | None = None
 
 
 class InterviewAnswerSubmitRequest(BaseModel):
@@ -197,3 +261,17 @@ class InterviewEvaluationResponse(BaseModel):
     reviewed_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    turn_critiques: list[InterviewTurnCritiqueResponse] = Field(default_factory=list)
+    plan_revisions: list[InterviewPlanRevisionResponse] = Field(default_factory=list)
+
+
+class InterviewQualityAuditResponse(BaseModel):
+    id: uuid.UUID
+    interview_session_id: uuid.UUID
+    audit_version: str
+    passed: bool
+    metrics: dict
+    quality_gates: list[dict]
+    warnings: list[str]
+    generated_at: datetime
+    created_at: datetime

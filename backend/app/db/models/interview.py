@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from sqlalchemy import (
     and_,
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -209,6 +210,15 @@ class InterviewSession(TimestampMixin, Base):
     evaluation: Mapped["InterviewEvaluation | None"] = relationship(
         back_populates="session", cascade="all, delete-orphan", uselist=False
     )
+    turn_critiques: Mapped[list["InterviewTurnCritique"]] = relationship(
+        back_populates="session", cascade="all, delete-orphan"
+    )
+    plan_revisions: Mapped[list["InterviewPlanRevision"]] = relationship(
+        back_populates="session", cascade="all, delete-orphan"
+    )
+    quality_audits: Mapped[list["InterviewQualityAudit"]] = relationship(
+        back_populates="session", cascade="all, delete-orphan"
+    )
 
 
 class InterviewPlan(TimestampMixin, Base):
@@ -319,6 +329,9 @@ class InterviewQuestion(Base):
     answer: Mapped["InterviewAnswer | None"] = relationship(
         back_populates="question", cascade="all, delete-orphan", uselist=False
     )
+    critique: Mapped["InterviewTurnCritique | None"] = relationship(
+        back_populates="question", uselist=False
+    )
 
 
 class InterviewAnswer(Base):
@@ -355,6 +368,161 @@ class InterviewAnswer(Base):
     )
 
     question: Mapped[InterviewQuestion] = relationship(back_populates="answer")
+    critique: Mapped["InterviewTurnCritique | None"] = relationship(
+        back_populates="answer", uselist=False
+    )
+
+
+class InterviewTurnCritique(Base):
+    __tablename__ = "interview_turn_critique"
+    __table_args__ = (
+        CheckConstraint("score >= 0 AND score <= 100", name="interview_turn_critique_score"),
+        CheckConstraint(
+            "confidence >= 0 AND confidence <= 1",
+            name="interview_turn_critique_confidence",
+        ),
+        CheckConstraint(
+            "next_action IN ('FOLLOW_UP', 'INCREASE_DIFFICULTY', "
+            "'DECREASE_DIFFICULTY', 'SWITCH_TOPIC', 'END_INTERVIEW')",
+            name="interview_turn_critique_action",
+        ),
+        CheckConstraint(
+            "difficulty_delta IN (-1, 0, 1)",
+            name="interview_turn_critique_difficulty_delta",
+        ),
+        CheckConstraint(
+            "decision_source IN ('MODEL', 'FALLBACK_RULE')",
+            name="interview_turn_critique_source",
+        ),
+        UniqueConstraint("interview_question_id", name="interview_turn_critique_question"),
+        UniqueConstraint("interview_answer_id", name="interview_turn_critique_answer"),
+        Index(
+            "idx_interview_turn_critique_session_created",
+            "interview_session_id",
+            "created_at",
+        ),
+        Index("idx_interview_turn_critique_action", "next_action"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.uuid_generate_v4()
+    )
+    interview_session_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("interview_session.id", ondelete="CASCADE"), nullable=False
+    )
+    interview_question_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("interview_question.id", ondelete="CASCADE"), nullable=False
+    )
+    interview_answer_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("interview_answer.id", ondelete="CASCADE"), nullable=False
+    )
+    score: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
+    strengths: Mapped[list] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+    knowledge_gaps: Mapped[list] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+    answer_evidence: Mapped[list] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+    next_action: Mapped[str] = mapped_column(String(30), nullable=False)
+    difficulty_delta: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    confidence: Mapped[Decimal] = mapped_column(Numeric(4, 3), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    decision_source: Mapped[str] = mapped_column(String(20), nullable=False)
+    model_name: Mapped[str | None] = mapped_column(String(100))
+    prompt_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    error_message: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    session: Mapped[InterviewSession] = relationship(back_populates="turn_critiques")
+    question: Mapped[InterviewQuestion] = relationship(back_populates="critique")
+    answer: Mapped[InterviewAnswer] = relationship(back_populates="critique")
+    plan_revision: Mapped["InterviewPlanRevision | None"] = relationship(
+        back_populates="critique", uselist=False
+    )
+
+
+class InterviewPlanRevision(Base):
+    __tablename__ = "interview_plan_revision"
+    __table_args__ = (
+        CheckConstraint("version > 0", name="interview_plan_revision_version"),
+        CheckConstraint(
+            "action IN ('FOLLOW_UP', 'INCREASE_DIFFICULTY', 'DECREASE_DIFFICULTY', "
+            "'SWITCH_TOPIC', 'END_INTERVIEW')",
+            name="interview_plan_revision_action",
+        ),
+        CheckConstraint(
+            "target_difficulty IS NULL OR target_difficulty IN ('EASY', 'MEDIUM', 'HARD')",
+            name="interview_plan_revision_difficulty",
+        ),
+        CheckConstraint(
+            "remaining_question_budget >= 0",
+            name="interview_plan_revision_remaining_budget",
+        ),
+        UniqueConstraint(
+            "interview_session_id", "version", name="interview_plan_revision_session_version"
+        ),
+        UniqueConstraint("source_critique_id", name="interview_plan_revision_critique"),
+        Index(
+            "idx_interview_plan_revision_session_version",
+            "interview_session_id",
+            "version",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.uuid_generate_v4()
+    )
+    interview_session_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("interview_session.id", ondelete="CASCADE"), nullable=False
+    )
+    source_critique_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("interview_turn_critique.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    action: Mapped[str] = mapped_column(String(30), nullable=False)
+    target_competency: Mapped[str | None] = mapped_column(String(150))
+    target_difficulty: Mapped[str | None] = mapped_column(String(20))
+    covered_competencies: Mapped[list] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+    priority_competencies: Mapped[list] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+    knowledge_gaps: Mapped[list] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+    rationale: Mapped[str] = mapped_column(Text, nullable=False)
+    workflow_trace: Mapped[list] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+    before_snapshot: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    after_snapshot: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    change_set: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    remaining_question_budget: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="0"
+    )
+    competency_budget: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    session: Mapped[InterviewSession] = relationship(back_populates="plan_revisions")
+    critique: Mapped[InterviewTurnCritique] = relationship(back_populates="plan_revision")
 
 
 class InterviewEvaluation(TimestampMixin, Base):
@@ -409,3 +577,52 @@ class InterviewEvaluation(TimestampMixin, Base):
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     session: Mapped[InterviewSession] = relationship(back_populates="evaluation")
+
+
+class InterviewQualityAudit(Base):
+    __tablename__ = "interview_quality_audit"
+    __table_args__ = (
+        UniqueConstraint(
+            "interview_session_id",
+            "audit_version",
+            name="interview_quality_audit_session_version",
+        ),
+        Index(
+            "idx_interview_quality_audit_session_generated",
+            "interview_session_id",
+            "generated_at",
+        ),
+        Index(
+            "idx_interview_quality_audit_passed",
+            "passed",
+            "generated_at",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.uuid_generate_v4()
+    )
+    interview_session_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("interview_session.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    audit_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    passed: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    metrics: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    quality_gates: Mapped[list] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+    warnings: Mapped[list] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+    generated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    session: Mapped[InterviewSession] = relationship(back_populates="quality_audits")

@@ -1,4 +1,4 @@
-import type { KnowledgeBase, KnowledgeBaseCreateRequest, KnowledgeBaseRenameRequest } from '../types/knowledgeBase'
+import type { KnowledgeBase, KnowledgeBaseCreateRequest, KnowledgeBaseUpdateRequest } from '../types/knowledgeBase'
 import { apiClient } from './client'
 
 export async function getKnowledgeBases(workspaceId: string) {
@@ -11,10 +11,10 @@ export async function createKnowledgeBase(workspaceId: string, request: Knowledg
   return response.data
 }
 
-export async function renameKnowledgeBase(
+export async function updateKnowledgeBase(
   workspaceId: string,
   knowledgeBaseId: string,
-  request: KnowledgeBaseRenameRequest,
+  request: KnowledgeBaseUpdateRequest,
 ) {
   const response = await apiClient.patch<KnowledgeBase>(
     `/workspaces/${workspaceId}/knowledge-bases/${knowledgeBaseId}`,

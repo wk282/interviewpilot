@@ -48,6 +48,7 @@ class PublicInterviewInvitationResponse(BaseModel):
     scheduled_at: datetime | None
     expires_at: datetime
     status: str
+    evaluation_status: str | None = None
     decision: str | None = None
     decided_at: datetime | None = None
 

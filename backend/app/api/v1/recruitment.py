@@ -14,10 +14,12 @@ from app.api.dependencies import get_current_user
 from app.api.v1.interviews import (
     READ_ROLES,
     WRITE_ROLES,
+    ensure_next_question_after_submitted_answer,
     generate_and_activate_next_question,
     question_has_timed_out,
     runtime_response,
     session_response,
+    validate_reference_knowledge_bases,
 )
 from app.core.config import settings
 from app.core.logger import logger
@@ -62,6 +64,7 @@ from app.schemas.recruitment import (
 )
 from app.workers.ingestion_tasks import process_document
 from app.services.evaluation_lifecycle import enqueue_interview_evaluation
+from app.services.interview_agent_graph import finish_interview_runtime_agent_graph
 
 
 router = APIRouter(tags=["岗位申请与站内消息"])
@@ -199,6 +202,14 @@ async def application_response(
         resume_status=resume_document.status if resume_document else None,
         interview_session_id=interview.id if interview else None,
         interview_status=interview.status if interview else None,
+        interview_current_question_order=(
+            interview.current_question_order if interview else None
+        ),
+        interview_max_question_count=(
+            int(interview.configuration.get("max_question_count", 10))
+            if interview
+            else None
+        ),
         thread_id=thread.id,
         submitted_at=application.submitted_at,
         reviewed_at=application.reviewed_at,
@@ -210,7 +221,7 @@ async def application_response(
             if decision_user
             else None
         ),
-        decided_at=application.decided_at if include_internal else None,
+        decided_at=application.decided_at,
         created_at=application.created_at,
         updated_at=application.updated_at,
     )
@@ -835,7 +846,9 @@ async def create_application_interview(
     current_user: AppUser = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ) -> InterviewSessionResponse:
-    await require_workspace_role(session, workspace_id, current_user.id, WRITE_ROLES)
+    _, membership = await require_workspace_role(
+        session, workspace_id, current_user.id, WRITE_ROLES
+    )
     application = await session.scalar(
         select(JobApplication)
         .where(
@@ -860,6 +873,13 @@ async def create_application_interview(
     resume = await session.get(Document, candidate.resume_document_id)
     if resume is None or resume.status != "READY":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="投递简历尚未处理完成")
+    reference_knowledge_base_ids = await validate_reference_knowledge_bases(
+        session,
+        workspace_id,
+        request.reference_knowledge_base_ids,
+        current_user.id,
+        can_access_all_private=membership.role in {"OWNER", "ADMIN"},
+    )
     interview = InterviewSession(
         workspace_id=workspace_id,
         job_position_id=position.id,
@@ -870,7 +890,10 @@ async def create_application_interview(
         status="DRAFT",
         scheduled_at=request.scheduled_at,
         configuration={
-            "reference_knowledge_base_ids": [],
+            "reference_knowledge_base_ids": [
+                str(knowledge_base_id)
+                for knowledge_base_id in reference_knowledge_base_ids
+            ],
             "max_question_count": request.max_question_count,
             "question_time_limit_minutes": request.question_time_limit_minutes,
         },
@@ -1177,7 +1200,7 @@ async def candidate_interview_context(
         .where(
             InterviewSession.id == interview_id,
             JobApplication.candidate_user_id == user.id,
-            JobApplication.status.in_(("INTERVIEW", "HIRED")),
+            JobApplication.status.in_(("INTERVIEW", "HIRED", "REJECTED")),
         )
     )
     if for_update:
@@ -1221,6 +1244,11 @@ async def get_assigned_interview_runtime(
         if interview.status == "COMPLETED":
             await enqueue_interview_evaluation(session, interview)
         return await runtime_response(session, interview, question_timed_out=True)
+    if interview.status == "IN_PROGRESS" and current_question is None:
+        await generate_and_activate_next_question(session, interview, actor)
+        await session.commit()
+        if interview.status == "COMPLETED":
+            await enqueue_interview_evaluation(session, interview)
     return await runtime_response(session, interview)
 
 
@@ -1271,6 +1299,9 @@ async def answer_assigned_interview(
     _, interview, actor = await candidate_interview_context(
         session, interview_id, current_user, for_update=True
     )
+    if interview.status == "COMPLETED":
+        await enqueue_interview_evaluation(session, interview)
+        return await runtime_response(session, interview)
     if interview.status != "IN_PROGRESS":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="面试当前不在进行中")
     question = await session.scalar(
@@ -1278,12 +1309,33 @@ async def answer_assigned_interview(
         .where(
             InterviewQuestion.id == question_id,
             InterviewQuestion.interview_session_id == interview.id,
-            InterviewQuestion.order_no == interview.current_question_order,
-            InterviewQuestion.status == "ASKED",
         )
         .with_for_update()
     )
     if question is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="问题不存在或不属于当前面试")
+    if question.status == "ANSWERED":
+        existing_answer = await session.scalar(
+            select(InterviewAnswer).where(
+                InterviewAnswer.interview_question_id == question.id
+            )
+        )
+        if existing_answer is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="回答状态异常，请刷新面试页面",
+            )
+        await ensure_next_question_after_submitted_answer(
+            session, interview, actor
+        )
+        await session.commit()
+        if interview.status == "COMPLETED":
+            await enqueue_interview_evaluation(session, interview)
+        return await runtime_response(session, interview)
+    if (
+        question.order_no != interview.current_question_order
+        or question.status != "ASKED"
+    ):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="只能回答当前问题")
     if question_has_timed_out(question, interview):
         question.status = "SKIPPED"
@@ -1384,5 +1436,6 @@ async def finish_assigned_interview(
     interview.status = "COMPLETED"
     interview.completed_at = datetime.now(timezone.utc)
     await session.commit()
+    await finish_interview_runtime_agent_graph(session, interview)
     await enqueue_interview_evaluation(session, interview)
     return await runtime_response(session, interview)

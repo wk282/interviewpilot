@@ -50,7 +50,12 @@ ALL_PROFILES = [
     "VECTOR_BM25_RERANK",
     "VECTOR_TRIGRAM_BM25",
     "VECTOR_TRIGRAM_BM25_RERANK",
+    "VECTOR_BM25_RRF",
+    "VECTOR_BM25_RRF_RERANK",
+    "VECTOR_TRIGRAM_BM25_RRF",
+    "VECTOR_TRIGRAM_BM25_RRF_RERANK",
 ]
+
 CUTOFFS = (1, 3, 5, 10)
 CRITIC_ACTIONS = {
     "FOLLOW_UP",
@@ -411,6 +416,11 @@ def aggregate_crag_routes(rows: list[dict]) -> dict[str, float | int]:
 
     rewrite_count = 0
     web_search_count = 0
+    model_grade_count = 0
+    fallback_grade_count = 0
+    empty_evidence_grade_count = 0
+    fallback_case_count = 0
+    grader_call_count = 0
     grade_counts = {"sufficient": 0, "partial": 0, "irrelevant": 0, "unknown": 0}
     for row in completed:
         crag = row["crag"]
@@ -421,26 +431,52 @@ def aggregate_crag_routes(rows: list[dict]) -> dict[str, float | int]:
         }
         rewrite_count += int("rewrite_query" in nodes)
         web_search_count += int("web_search" in nodes)
+        grader_events = [
+            event
+            for event in crag.get("trace", [])
+            if isinstance(event, dict) and event.get("node") == "retrieval_grader"
+        ]
+        grading_sources = [event.get("grading_source") for event in grader_events]
+        grader_call_count += len(grading_sources)
+        model_grade_count += grading_sources.count("model")
+        fallback_grade_count += grading_sources.count("fallback_rule")
+        empty_evidence_grade_count += grading_sources.count("empty_evidence_rule")
+        fallback_case_count += int("fallback_rule" in grading_sources)
         status = str(crag.get("grade", {}).get("status", "unknown")).lower()
         grade_counts[status if status in grade_counts else "unknown"] += 1
 
     count = len(completed)
-    category_summary = {}
-    for category in sorted({row["category"] for row in rows}):
-        category_rows = [row for row in rows if row["category"] == category]
-        category_metrics = aggregate_metrics(category_rows)
-        if crag:
-            category_metrics.update(aggregate_crag_routes(category_rows))
-        category_summary[category] = category_metrics
     return {
         "crag_case_count": count,
         "crag_rewrite_rate": round(rewrite_count / count, 6),
         "crag_web_search_rate": round(web_search_count / count, 6),
+        "crag_grader_call_count": grader_call_count,
+        "crag_model_grader_call_rate": round(
+            model_grade_count / grader_call_count, 6
+        ) if grader_call_count else 0.0,
+        "crag_fallback_grader_call_rate": round(
+            fallback_grade_count / grader_call_count, 6
+        ) if grader_call_count else 0.0,
+        "crag_empty_evidence_rule_call_rate": round(
+            empty_evidence_grade_count / grader_call_count, 6
+        ) if grader_call_count else 0.0,
+        "crag_fallback_case_rate": round(fallback_case_count / count, 6),
         **{
             f"crag_grade_{status}_rate": round(value / count, 6)
             for status, value in grade_counts.items()
         },
     }
+
+
+def aggregate_category_metrics(rows: list[dict], include_crag: bool = False) -> dict:
+    category_summary = {}
+    for category in sorted({row["category"] for row in rows}):
+        category_rows = [row for row in rows if row["category"] == category]
+        category_metrics = aggregate_metrics(category_rows)
+        if include_crag:
+            category_metrics.update(aggregate_crag_routes(category_rows))
+        category_summary[category] = category_metrics
+    return category_summary
 
 
 async def evaluate_configuration(
@@ -516,6 +552,7 @@ async def evaluate_configuration(
     summary = aggregate_metrics(rows)
     if crag:
         summary.update(aggregate_crag_routes(rows))
+    category_summary = aggregate_category_metrics(rows, include_crag=crag)
     return {
         "name": config_name,
         "profile": profile,
@@ -531,6 +568,7 @@ def runtime_snapshot(args: argparse.Namespace, profiles: list[str]) -> dict:
     from app.api.v1.retrieval import FUSION_WEIGHTS
     from app.core.config import settings
     from app.services.crag_workflow import CRAG_PROMPT_VERSION
+    from app.services.answer_critic import CRITIC_PROMPT_VERSION
     from app.services.interview_conductor import CONDUCTOR_PROMPT_VERSION
     from app.services.interview_evaluator import EVALUATION_PROMPT_VERSION
     from app.services.interview_planner import PROMPT_VERSION
@@ -548,6 +586,7 @@ def runtime_snapshot(args: argparse.Namespace, profiles: list[str]) -> dict:
             "conductor": CONDUCTOR_PROMPT_VERSION,
             "evaluator": EVALUATION_PROMPT_VERSION,
             "crag": CRAG_PROMPT_VERSION,
+            "answer_critic": CRITIC_PROMPT_VERSION,
         },
         "retrieval": {
             "profiles": profiles,
@@ -655,6 +694,9 @@ def write_reports(report_dir: Path, payload: dict) -> None:
             "configuration",
             "crag_rewrite_rate",
             "crag_web_search_rate",
+            "crag_model_grader_call_rate",
+            "crag_fallback_grader_call_rate",
+            "crag_fallback_case_rate",
             "crag_grade_sufficient_rate",
             "crag_grade_partial_rate",
             "crag_grade_irrelevant_rate",
@@ -838,6 +880,7 @@ def write_critic_reports(report_dir: Path, payload: dict) -> None:
         "gap_recall",
         "gap_f1",
         "gap_exact_match",
+        "fallback_prediction_rate",
     ]
     lines = [
         "# Critic Regression Report",
@@ -872,6 +915,20 @@ def score_critic(args: argparse.Namespace) -> None:
     if errors:
         raise ValueError("\n".join(errors))
 
+    run_id = f"critic-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
+    payload = build_critic_payload(dataset, predictions, args.predictions, run_id)
+    output = report_directory(run_id)
+    write_critic_reports(output, payload)
+    print(f"critic reports written to {output}")
+
+
+def build_critic_payload(
+    dataset: list[dict],
+    predictions: list[dict],
+    prediction_path: Path,
+    run_id: str,
+) -> dict:
+
     prediction_by_id = {row["case_id"]: row for row in predictions}
     prediction_metadata = {
         "model_names": sorted(
@@ -902,14 +959,26 @@ def score_critic(args: argparse.Namespace) -> None:
             }
         )
 
-    run_id = f"critic-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
+    summary = aggregate_critic_metrics(rows)
+    fallback_count = sum(
+        1 for row in predictions if row.get("decision_source") == "FALLBACK_RULE"
+    )
+    summary.update(
+        {
+            "model_prediction_count": len(predictions) - fallback_count,
+            "fallback_prediction_count": fallback_count,
+            "fallback_prediction_rate": round(
+                fallback_count / len(predictions), 6
+            ) if predictions else 0.0,
+        }
+    )
     payload = {
         "run_id": run_id,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "dataset_id": "interview-turn-v1",
-        "prediction_file": str(args.predictions.resolve()),
+        "prediction_file": str(prediction_path.resolve()),
         "prediction_metadata": prediction_metadata,
-        "summary": aggregate_critic_metrics(rows),
+        "summary": summary,
         "competency_summary": {
             competency: aggregate_critic_metrics(
                 [row for row in rows if row["competency"] == competency]
@@ -918,9 +987,77 @@ def score_critic(args: argparse.Namespace) -> None:
         },
         "cases": rows,
     }
+    return payload
+
+
+async def run_critic_evaluation() -> None:
+    from app.core.config import settings
+    from app.services.answer_critic import (
+        CRITIC_PROMPT_VERSION,
+        fallback_critique_values,
+        generate_critique,
+    )
+
+    dataset = load_jsonl(CRITIC_DATASET_PATH)
+    errors = validate_critic_dataset(dataset)
+    if errors:
+        raise ValueError("\n".join(errors))
+    predictions = []
+    for index, case in enumerate(dataset, start=1):
+        decision_source = "MODEL"
+        error_message = None
+        try:
+            generated = await generate_critique(
+                {
+                    "interview_mode": "MOCK",
+                    "question": {
+                        "content": case["question"],
+                        "competency": case["competency"],
+                        "difficulty": "MEDIUM",
+                        "expected_points": [],
+                    },
+                    "answer": case["answer"],
+                    "reference_evidence": [],
+                }
+            )
+        except Exception as error:
+            decision_source = "FALLBACK_RULE"
+            error_message = f"{type(error).__name__}: {error}"[:2000]
+            generated = fallback_critique_values(case["answer"], "MEDIUM", [])
+        predictions.append(
+            {
+                "case_id": case["case_id"],
+                "score": generated.score,
+                "next_action": generated.next_action,
+                "difficulty_delta": generated.difficulty_delta,
+                "knowledge_gaps": generated.knowledge_gaps,
+                "strengths": generated.strengths,
+                "answer_evidence": generated.answer_evidence,
+                "reason": generated.reason,
+                "confidence": generated.confidence,
+                "decision_source": decision_source,
+                "error_message": error_message,
+                "model_name": (
+                    settings.LLM_MINI_MODEL if decision_source == "MODEL" else None
+                ),
+                "prompt_version": CRITIC_PROMPT_VERSION,
+            }
+        )
+        print(f"[CRITIC] {index}/{len(dataset)} {case['case_id']} {decision_source}")
+
+    validation_errors = validate_critic_predictions(dataset, predictions)
+    if validation_errors:
+        raise ValueError("\n".join(validation_errors))
+    run_id = f"critic-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
     output = report_directory(run_id)
+    prediction_path = output / "predictions.jsonl"
+    prediction_path.write_text(
+        "\n".join(json.dumps(row, ensure_ascii=False) for row in predictions) + "\n",
+        encoding="utf-8",
+    )
+    payload = build_critic_payload(dataset, predictions, prediction_path, run_id)
     write_critic_reports(output, payload)
-    print(f"critic reports written to {output}")
+    print(f"critic evaluation written to {output}")
 
 
 def verify_command() -> None:
@@ -969,6 +1106,9 @@ def parser() -> argparse.ArgumentParser:
         "score-critic", help="Score Critic predictions against interview-turn-v1"
     )
     critic.add_argument("--predictions", required=True, type=Path)
+    subparsers.add_parser(
+        "run-critic", help="Generate and score predictions with the production Answer Critic"
+    )
 
     prepare = subparsers.add_parser("prepare", help="Create and ingest evaluation corpus")
     prepare.add_argument("--workspace-id", required=True)
@@ -1017,6 +1157,8 @@ def main() -> None:
         rebuild_report(args.input, args.output_name)
     elif args.command == "score-critic":
         score_critic(args)
+    elif args.command == "run-critic":
+        asyncio.run(run_critic_evaluation())
 
 
 if __name__ == "__main__":

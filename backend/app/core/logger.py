@@ -31,7 +31,10 @@ def setup_logger():
     logger.add(
         sys.stdout,
         format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
-        level="INFO"
+        level="INFO",
+        enqueue=True,
+        backtrace=False,
+        diagnose=False,
     )
 
     # 3. 添加本地文件输出
@@ -46,13 +49,17 @@ def setup_logger():
     # 4. loguru 的企业级杀手功能：自动轮转（Rotation）与保留策略（Retention）
     # rotation="10 MB": 单个日志文件一旦超过 10MB，就自动切分，打包新建一个文件
     # retention="7 days": 历史日志文件最多保留 7 天，过期的自动删除（再也不用写定时脚本清磁盘了！）
+    process_role = "celery" if any("celery" in argument.lower() for argument in sys.argv) else "app"
     logger.add(
-        os.path.join(log_dir, "app_{time:YYYY-MM-DD}.log"),
+        os.path.join(log_dir, f"{process_role}_{{time:YYYY-MM-DD}}.log"),
         format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
         level="INFO",
         rotation="10 MB",
         retention="7 days",
-        encoding="utf-8"
+        encoding="utf-8",
+        enqueue=True,
+        backtrace=False,
+        diagnose=False,
     )
     
     return logger

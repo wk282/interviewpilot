@@ -3,6 +3,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import router
 from app.api.v1.router import router as v1_router
+from app.core.event_loop import configure_windows_selector_event_loop
+
+
+configure_windows_selector_event_loop()
 
 # ==========================================
 # 知识点讲解:

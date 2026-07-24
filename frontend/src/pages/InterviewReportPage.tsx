@@ -1,14 +1,20 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeftOutlined, CheckOutlined, FileDoneOutlined, ReloadOutlined, StopOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, CheckOutlined, DownloadOutlined, FileDoneOutlined, ReloadOutlined, StopOutlined } from '@ant-design/icons'
 import { Alert, Button, Empty, Input, List, Modal, Progress, Space, Spin, Tag, Typography, message } from 'antd'
 import axios from 'axios'
 import { useNavigate, useParams } from 'react-router-dom'
-import { createInterviewEvaluation, getInterviewEvaluation } from '../api/interviews'
+import {
+  createInterviewEvaluation,
+  createInterviewQualityAudit,
+  downloadInterviewEvaluationPdf,
+  getInterviewEvaluation,
+  getInterviewQualityAudit,
+} from '../api/interviews'
 import { createInterviewDecision, getInterviewDecision } from '../api/recruitment'
 import AppHeader from '../components/AppHeader'
 import CandidateSidebar from '../components/CandidateSidebar'
 import EnterpriseSidebar from '../components/EnterpriseSidebar'
-import type { InterviewEvaluation } from '../types/interview'
+import type { InterviewEvaluation, InterviewQualityAudit } from '../types/interview'
 import type { InterviewDecision } from '../types/recruitment'
 import { getApiErrorMessage } from '../utils/apiError'
 import { getActiveWorkspace } from '../utils/workspaceStorage'
@@ -29,14 +35,32 @@ const recommendationLabel: Record<string, string> = {
   NOT_APPLICABLE: '模拟面试',
 }
 
+const criticActionLabel: Record<string, string> = {
+  FOLLOW_UP: '继续追问',
+  INCREASE_DIFFICULTY: '提高难度',
+  DECREASE_DIFFICULTY: '降低难度',
+  SWITCH_TOPIC: '切换能力点',
+  END_INTERVIEW: '结束面试',
+}
+
+const difficultyLabel: Record<string, string> = {
+  EASY: '基础',
+  MEDIUM: '进阶',
+  HARD: '深入',
+}
+
 function InterviewReportPage() {
   const { interviewId = '' } = useParams()
   const workspace = getActiveWorkspace()
   const personal = workspace?.type === 'PERSONAL'
   const navigate = useNavigate()
   const [evaluation, setEvaluation] = useState<InterviewEvaluation | null>(null)
+  const [qualityAudit, setQualityAudit] = useState<InterviewQualityAudit | null>(null)
+  const [auditLoading, setAuditLoading] = useState(false)
+  const [auditGenerating, setAuditGenerating] = useState(false)
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
+  const [downloading, setDownloading] = useState(false)
   const [interviewDecision, setInterviewDecision] = useState<InterviewDecision | null>(null)
   const [decisionStatus, setDecisionStatus] = useState<'REJECTED' | 'HIRED' | null>(null)
   const [decisionNote, setDecisionNote] = useState('')
@@ -62,6 +86,19 @@ function InterviewReportPage() {
   }
 
   useEffect(() => { void loadEvaluation() }, [workspace?.id, interviewId])
+  useEffect(() => {
+    if (!workspace || !interviewId || evaluation?.status !== 'COMPLETED') return
+    setAuditLoading(true)
+    setQualityAudit(null)
+    getInterviewQualityAudit(workspace.id, interviewId)
+      .then(setQualityAudit)
+      .catch((requestError) => {
+        if (!axios.isAxiosError(requestError) || requestError.response?.status !== 404) {
+          message.error(getApiErrorMessage(requestError, '业务质量审计加载失败'))
+        }
+      })
+      .finally(() => setAuditLoading(false))
+  }, [workspace?.id, interviewId, evaluation?.status])
   useEffect(() => {
     if (!workspace || personal || !interviewId) return
     getInterviewDecision(workspace.id, interviewId)
@@ -115,6 +152,32 @@ function InterviewReportPage() {
     }
   }
 
+  const generateQualityAudit = async () => {
+    if (!workspace) return
+    setAuditGenerating(true)
+    try {
+      setQualityAudit(await createInterviewQualityAudit(workspace.id, interviewId))
+      message.success('业务质量审计已生成')
+    } catch (requestError) {
+      message.error(getApiErrorMessage(requestError, '业务质量审计生成失败'))
+    } finally {
+      setAuditGenerating(false)
+    }
+  }
+
+  const downloadReport = async () => {
+    if (!workspace) return
+    setDownloading(true)
+    try {
+      await downloadInterviewEvaluationPdf(workspace.id, interviewId)
+      message.success('评估报告下载已开始')
+    } catch (requestError) {
+      message.error(getApiErrorMessage(requestError, '评估报告下载失败'))
+    } finally {
+      setDownloading(false)
+    }
+  }
+
   const interviewsPath = personal ? '/candidate/interviews' : '/enterprise/interviews'
 
   return (
@@ -131,7 +194,9 @@ function InterviewReportPage() {
               <Typography.Paragraph type="secondary">{evaluation?.status ?? 'NOT_GENERATED'}</Typography.Paragraph>
             </div>
             <Space>
+              {evaluation?.status === 'COMPLETED' && <Button icon={<DownloadOutlined />} loading={downloading} onClick={() => void downloadReport()}>下载 PDF</Button>}
               {evaluation?.status === 'FAILED' && <Button icon={<ReloadOutlined />} loading={generating} onClick={generate}>重新生成</Button>}
+              {evaluation?.status === 'COMPLETED' && !qualityAudit && !auditLoading && <Button loading={auditGenerating} onClick={generateQualityAudit}>生成质量审计</Button>}
               {!personal && interviewDecision?.decision && <Tag color={interviewDecision.decision === 'HIRED' ? 'green' : 'red'}>{interviewDecision.decision === 'HIRED' ? '已通过' : '未通过'}</Tag>}
               {!personal && evaluation?.status === 'COMPLETED' && interviewDecision && !interviewDecision.decision && !['REJECTED', 'HIRED', 'WITHDRAWN'].includes(interviewDecision.application_status ?? '') && (
                 <>
@@ -173,6 +238,40 @@ function InterviewReportPage() {
                   {evaluation.recommendation && <Tag color="blue">{recommendationLabel[evaluation.recommendation] ?? evaluation.recommendation}</Tag>}
                 </section>
 
+                {qualityAudit && (
+                  <section className="quality-audit-section">
+                    <div className="quality-audit-heading">
+                      <div>
+                        <Typography.Title level={5}>系统业务质量审计</Typography.Title>
+                        <Typography.Text type="secondary">{qualityAudit.audit_version} · {new Date(qualityAudit.generated_at).toLocaleString('zh-CN')}</Typography.Text>
+                      </div>
+                      <Tag color={qualityAudit.passed ? 'green' : 'red'}>{qualityAudit.passed ? '质量门禁通过' : '质量门禁未通过'}</Tag>
+                    </div>
+                    <div className="quality-audit-metrics">
+                      <div><span>能力覆盖率</span><strong>{Math.round(Number(qualityAudit.metrics.competency_coverage_rate ?? 0) * 100)}%</strong></div>
+                      <div><span>Critic 覆盖率</span><strong>{Math.round(Number(qualityAudit.metrics.critic_coverage_rate ?? 0) * 100)}%</strong></div>
+                      <div><span>动态执行一致率</span><strong>{Math.round(Number(qualityAudit.metrics.adaptive_compliance_rate ?? 0) * 100)}%</strong></div>
+                      <div><span>报告证据有效率</span><strong>{Math.round(Number(qualityAudit.metrics.report_evidence_validity_rate ?? 0) * 100)}%</strong></div>
+                    </div>
+                    {qualityAudit.warnings.length > 0 && (
+                      <Alert type="warning" showIcon message="审计发现问题" description={qualityAudit.warnings.join('；')} />
+                    )}
+                    <List
+                      size="small"
+                      dataSource={qualityAudit.quality_gates}
+                      renderItem={(gate) => (
+                        <List.Item>
+                          <span>{gate.label}</span>
+                          <Space>
+                            {!gate.required && <Tag>观察项</Tag>}
+                            <Tag color={gate.passed ? 'green' : 'red'}>{gate.passed ? '通过' : '未通过'}</Tag>
+                          </Space>
+                        </List.Item>
+                      )}
+                    />
+                  </section>
+                )}
+
                 <section className="report-findings">
                   <div><Typography.Title level={5}>优势</Typography.Title><ul>{evaluation.strengths.map((item, index) => <li key={index}>{item}</li>)}</ul></div>
                   <div><Typography.Title level={5}>改进项</Typography.Title><ul>{evaluation.weaknesses.map((item, index) => <li key={index}>{item}</li>)}</ul></div>
@@ -190,6 +289,66 @@ function InterviewReportPage() {
                     {interviewDecision.internal_note && <p>{interviewDecision.internal_note}</p>}
                   </section>
                 )}
+
+                <section className="report-evidence">
+                  <Typography.Title level={5}>逐轮 Critic 决策</Typography.Title>
+                  <List
+                    dataSource={evaluation.turn_critiques}
+                    locale={{ emptyText: '该面试没有逐轮 Critic 记录' }}
+                    renderItem={(item, index) => (
+                      <List.Item>
+                        <div className="report-evidence-item">
+                          <div>
+                            <Tag>第 {index + 1} 轮</Tag>
+                            <Tag color="blue">{item.score.toFixed(0)} 分</Tag>
+                            <Tag>{criticActionLabel[item.next_action] ?? item.next_action}</Tag>
+                            {item.decision_source === 'FALLBACK_RULE' && <Tag color="orange">规则兜底</Tag>}
+                          </div>
+                          <p>{item.reason}</p>
+                          {item.answer_evidence.map((evidence, evidenceIndex) => (
+                            <blockquote key={evidenceIndex}>{evidence}</blockquote>
+                          ))}
+                          {item.knowledge_gaps.length > 0 && (
+                            <Space wrap>{item.knowledge_gaps.map((gap) => <Tag key={gap}>{gap}</Tag>)}</Space>
+                          )}
+                        </div>
+                      </List.Item>
+                    )}
+                  />
+                </section>
+
+                <section className="report-evidence">
+                  <Typography.Title level={5}>动态计划修订</Typography.Title>
+                  <List
+                    dataSource={evaluation.plan_revisions}
+                    locale={{ emptyText: '该面试没有动态计划修订记录' }}
+                    renderItem={(item) => (
+                      <List.Item>
+                        <div className="report-evidence-item">
+                          <div>
+                            <Tag>计划 v{item.version}</Tag>
+                            <Tag color="blue">{criticActionLabel[item.action] ?? item.action}</Tag>
+                            {item.target_difficulty && <Tag>{difficultyLabel[item.target_difficulty] ?? item.target_difficulty}</Tag>}
+                          </div>
+                          {item.target_competency && <strong>下一能力点：{item.target_competency}</strong>}
+                          <p>{item.rationale}</p>
+                          <p>剩余题目预算：{item.remaining_question_budget}</p>
+                          {Object.keys(item.competency_budget).length > 0 && (
+                            <Space wrap>
+                              <span>能力预算：</span>
+                              {Object.entries(item.competency_budget).map(([competency, count]) => (
+                                <Tag key={competency}>{competency} {count} 题</Tag>
+                              ))}
+                            </Space>
+                          )}
+                          {item.covered_competencies.length > 0 && (
+                            <Space wrap><span>已覆盖：</span>{item.covered_competencies.map((competency) => <Tag key={competency}>{competency}</Tag>)}</Space>
+                          )}
+                        </div>
+                      </List.Item>
+                    )}
+                  />
+                </section>
 
                 <section className="report-evidence">
                   <Typography.Title level={5}>回答证据</Typography.Title>

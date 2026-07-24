@@ -102,6 +102,7 @@ export interface InterviewQuestion {
   max_score: number
   expected_points: string[]
   source_evidence: Array<Record<string, unknown>>
+  decision_metadata: Record<string, unknown>
 }
 
 export interface InterviewPlan {
@@ -120,6 +121,27 @@ export interface InterviewPlan {
   questions: InterviewQuestion[]
 }
 
+export interface AIStageMetrics {
+  sample_count: number
+  average_latency_ms: number
+  p50_latency_ms: number
+  p95_latency_ms: number
+  max_latency_ms: number
+}
+
+export interface InterviewObservability {
+  interview_id: string
+  question_count: number
+  measured_turn_count: number
+  total_tokens: number
+  fallback_event_count: number
+  fallback_turn_count: number
+  fallback_turn_rate: number
+  bottleneck_stage: string | null
+  stage_metrics: Record<string, AIStageMetrics>
+  route_counts: Record<string, number>
+}
+
 export interface InterviewRuntimeQuestion {
   id: string
   order_no: number
@@ -129,6 +151,43 @@ export interface InterviewRuntimeQuestion {
   difficulty: 'EASY' | 'MEDIUM' | 'HARD'
   generated_by: 'PLAN' | 'FOLLOW_UP' | 'HUMAN'
   asked_at: string | null
+}
+
+export interface InterviewTurnCritique {
+  id: string
+  interview_question_id: string
+  score: number
+  strengths: string[]
+  knowledge_gaps: string[]
+  answer_evidence: string[]
+  next_action: 'FOLLOW_UP' | 'INCREASE_DIFFICULTY' | 'DECREASE_DIFFICULTY' | 'SWITCH_TOPIC' | 'END_INTERVIEW'
+  difficulty_delta: -1 | 0 | 1
+  confidence: number
+  reason: string
+  decision_source: 'MODEL' | 'FALLBACK_RULE'
+  model_name: string | null
+  prompt_version: string
+  created_at: string
+}
+
+export interface InterviewPlanRevision {
+  id: string
+  source_critique_id: string
+  version: number
+  action: InterviewTurnCritique['next_action']
+  target_competency: string | null
+  target_difficulty: 'EASY' | 'MEDIUM' | 'HARD' | null
+  covered_competencies: string[]
+  priority_competencies: string[]
+  knowledge_gaps: string[]
+  rationale: string
+  workflow_trace: Array<Record<string, unknown>>
+  before_snapshot: Record<string, unknown>
+  after_snapshot: Record<string, unknown>
+  change_set: Record<string, { before: unknown; after: unknown }>
+  remaining_question_budget: number
+  competency_budget: Record<string, number>
+  created_at: string
 }
 
 export interface InterviewRuntime {
@@ -143,6 +202,11 @@ export interface InterviewRuntime {
   completed_at: string | null
   follow_up_generated: boolean
   question_timed_out: boolean
+  last_turn_feedback: InterviewTurnCritique | null
+  adaptive_plan_version: number | null
+  evaluation_status: 'PENDING' | 'GENERATING' | 'COMPLETED' | 'FAILED' | null
+  decision: 'HIRED' | 'REJECTED' | null
+  decided_at: string | null
 }
 
 export interface InterviewAnswerSubmitRequest {
@@ -173,7 +237,30 @@ export interface InterviewEvaluation {
   model_name: string | null
   prompt_version: string | null
   error_message: string | null
+  turn_critiques: InterviewTurnCritique[]
+  plan_revisions: InterviewPlanRevision[]
   reviewed_at: string | null
   created_at: string
   updated_at: string
+}
+
+export interface InterviewQualityGate {
+  key: string
+  label: string
+  value: number | boolean
+  threshold: number | boolean
+  passed: boolean
+  required: boolean
+}
+
+export interface InterviewQualityAudit {
+  id: string
+  interview_session_id: string
+  audit_version: string
+  passed: boolean
+  metrics: Record<string, number | boolean | null>
+  quality_gates: InterviewQualityGate[]
+  warnings: string[]
+  generated_at: string
+  created_at: string
 }

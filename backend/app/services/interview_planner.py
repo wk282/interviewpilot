@@ -1,6 +1,7 @@
 import asyncio
 import json
 import uuid
+from time import perf_counter
 from datetime import datetime, timezone
 
 from openai import AsyncOpenAI
@@ -21,15 +22,11 @@ from app.db.models.knowledge_base import KnowledgeBase
 from app.db.models.user import AppUser
 from app.schemas.retrieval import RetrievalSearchRequest
 from app.services.reranker import ZhipuReranker
+from app.services.ai_observability import elapsed_ms
+from app.services.ai_concurrency import ai_concurrency_slot
 
 
 PROMPT_VERSION = "interview-blueprint-v3"
-SUPPORTING_PURPOSES = {
-    "PUBLIC_QUESTION_BANK",
-    "ENTERPRISE_QUESTION_BANK",
-    "SCORING_RUBRIC",
-    "TECHNICAL_STANDARD",
-}
 EVIDENCE_PER_SOURCE = 5
 GLOBAL_RERANK_POOL_SIZE = 20
 FINAL_EVIDENCE_COUNT = 8
@@ -86,6 +83,7 @@ async def collect_evidence(
     candidate: CandidateProfile,
     user: AppUser,
     retrieval_query: str | None = None,
+    observability: dict | None = None,
 ) -> list[dict]:
     retrieval_sources: list[tuple[uuid.UUID, list[uuid.UUID] | None]] = []
     if candidate.resume_knowledge_base_id and candidate.resume_document_id:
@@ -103,14 +101,14 @@ async def collect_evidence(
             reference_ids.append(uuid.UUID(str(configured_id)))
         except (TypeError, ValueError):
             continue
-    if interview.mode == "MOCK" and reference_ids:
+    if reference_ids:
         validated_reference_ids = list(
             (
                 await session.scalars(
                     select(KnowledgeBase.id).where(
                         KnowledgeBase.id.in_(reference_ids),
                         KnowledgeBase.workspace_id == interview.workspace_id,
-                        KnowledgeBase.purpose == "PERSONAL_LEARNING",
+                        KnowledgeBase.purpose != "RESUME",
                     )
                 )
             ).all()
@@ -119,20 +117,6 @@ async def collect_evidence(
             (knowledge_base_id, None)
             for knowledge_base_id in validated_reference_ids
         )
-    supporting_ids = list(
-        (
-            await session.scalars(
-                select(KnowledgeBase.id)
-                .where(
-                    KnowledgeBase.workspace_id == interview.workspace_id,
-                    KnowledgeBase.purpose.in_(SUPPORTING_PURPOSES),
-                )
-                .order_by(KnowledgeBase.created_at.desc())
-                .limit(3)
-            )
-        ).all()
-    )
-    retrieval_sources.extend((knowledge_base_id, None) for knowledge_base_id in supporting_ids)
 
     if retrieval_query is None:
         retrieval_query = "\n".join(
@@ -154,14 +138,30 @@ async def collect_evidence(
     if not unique_retrieval_sources:
         return []
 
+    embedding_started_at = perf_counter()
     try:
         query_embedding = await create_query_embedding(retrieval_query)
     except Exception as error:
+        if observability is not None:
+            observability["embedding"] = {
+                "latency_ms": elapsed_ms(embedding_started_at),
+                "model": settings.EMBEDDING_MODEL_NAME,
+                "error": f"{type(error).__name__}: {error}"[:500],
+            }
         logger.warning(f"Plan evidence query embedding failed: {error}")
         return []
+    if observability is not None:
+        observability["embedding"] = {
+            "latency_ms": elapsed_ms(embedding_started_at),
+            "model": settings.EMBEDDING_MODEL_NAME,
+            "dimensions": settings.EMBEDDING_DIMENSIONS,
+        }
+        observability["retrieval_profile"] = settings.INTERVIEW_RETRIEVAL_PROFILE
 
     candidates: list[dict] = []
+    source_observability: list[dict] = []
     for knowledge_base_id, document_ids in unique_retrieval_sources:
+        source_started_at = perf_counter()
         try:
             response = await retrieve_knowledge_base(
                 workspace_id=interview.workspace_id,
@@ -169,7 +169,7 @@ async def collect_evidence(
                 request=RetrievalSearchRequest(
                     query=retrieval_query,
                     top_k=EVIDENCE_PER_SOURCE,
-                    profile="VECTOR_TRIGRAM_BM25",
+                    profile=settings.INTERVIEW_RETRIEVAL_PROFILE,
                     document_ids=list(document_ids) or None,
                 ),
                 current_user=user,
@@ -177,10 +177,25 @@ async def collect_evidence(
                 query_embedding=query_embedding,
             )
         except Exception as error:
+            source_observability.append(
+                {
+                    "knowledge_base_id": str(knowledge_base_id),
+                    "latency_ms": elapsed_ms(source_started_at),
+                    "result_count": 0,
+                    "error": f"{type(error).__name__}: {error}"[:500],
+                }
+            )
             logger.warning(
                 f"Plan evidence retrieval failed for knowledge base {knowledge_base_id}: {error}"
             )
             continue
+        source_observability.append(
+            {
+                "knowledge_base_id": str(knowledge_base_id),
+                "latency_ms": elapsed_ms(source_started_at),
+                "result_count": len(response.results),
+            }
+        )
         for result in response.results:
             candidates.append(
                 {
@@ -192,6 +207,8 @@ async def collect_evidence(
                     "fusion_score": result.fusion_score,
                 }
             )
+    if observability is not None:
+        observability["knowledge_base_retrievals"] = source_observability
 
     deduplicated: list[dict] = []
     seen_contents: set[str] = set()
@@ -211,34 +228,62 @@ async def collect_evidence(
     if not deduplicated:
         return []
 
-    rerank_results = await asyncio.to_thread(
-        ZhipuReranker().rerank,
-        retrieval_query,
-        [item["content"] for item in deduplicated],
-        min(FINAL_EVIDENCE_COUNT, len(deduplicated)),
-    )
-    selected: list[tuple[dict, float]] = []
+    selected: list[tuple[dict, float | None]] = []
     selected_indexes: set[int] = set()
-    for rerank_result in rerank_results:
-        result_index = rerank_result.get("index")
-        if (
-            not isinstance(result_index, int)
-            or not 0 <= result_index < len(deduplicated)
-            or result_index in selected_indexes
+    if settings.INTERVIEW_GLOBAL_RERANK_ENABLED:
+        rerank_started_at = perf_counter()
+        rerank_concurrency: dict = {}
+        async with ai_concurrency_slot(
+            "interview_evidence_rerank",
+            settings.RERANK_MODEL_NAME,
+            metrics_sink=rerank_concurrency,
         ):
-            continue
-        selected_indexes.add(result_index)
-        selected.append(
-            (
-                deduplicated[result_index],
-                float(rerank_result.get("relevance_score", 0.0)),
+            rerank_results = await asyncio.to_thread(
+                ZhipuReranker().rerank,
+                retrieval_query,
+                [item["content"] for item in deduplicated],
+                min(FINAL_EVIDENCE_COUNT, len(deduplicated)),
             )
-        )
+        if observability is not None:
+            observability["reranker"] = {
+                "enabled": True,
+                "latency_ms": elapsed_ms(rerank_started_at),
+                "candidate_count": len(deduplicated),
+                "result_count": len(rerank_results),
+                **rerank_concurrency,
+            }
+        for rerank_result in rerank_results:
+            result_index = rerank_result.get("index")
+            if (
+                not isinstance(result_index, int)
+                or not 0 <= result_index < len(deduplicated)
+                or result_index in selected_indexes
+            ):
+                continue
+            selected_indexes.add(result_index)
+            selected.append(
+                (
+                    deduplicated[result_index],
+                    float(rerank_result.get("relevance_score", 0.0)),
+                )
+            )
+    elif observability is not None:
+        observability["reranker"] = {
+            "enabled": False,
+            "latency_ms": 0,
+            "candidate_count": len(deduplicated),
+            "result_count": 0,
+        }
     for result_index, candidate_item in enumerate(deduplicated):
         if len(selected) >= FINAL_EVIDENCE_COUNT:
             break
         if result_index not in selected_indexes:
-            selected.append((candidate_item, 0.0))
+            selected.append(
+                (
+                    candidate_item,
+                    0.0 if settings.INTERVIEW_GLOBAL_RERANK_ENABLED else None,
+                )
+            )
 
     evidence: list[dict] = []
     for rank, (candidate_item, rerank_score) in enumerate(selected, start=1):
@@ -247,8 +292,10 @@ async def collect_evidence(
                 **candidate_item,
                 "evidence_id": rank,
                 "content": candidate_item["content"][:MAX_EVIDENCE_CONTENT_LENGTH],
-                "rerank_score": round(rerank_score, 6),
-                "rerank_rank": rank,
+                "rerank_score": (
+                    round(rerank_score, 6) if rerank_score is not None else None
+                ),
+                "rerank_rank": rank if rerank_score is not None else None,
             }
         )
     return evidence
@@ -262,7 +309,12 @@ async def generate_plan(
     candidate: CandidateProfile,
     user: AppUser,
 ) -> None:
+    logger.info(f"Planner evidence collection started: plan_id={plan.id}")
     evidence = await collect_evidence(session, interview, position, candidate, user)
+    logger.info(
+        f"Planner evidence collection completed: plan_id={plan.id}, "
+        f"evidence_count={len(evidence)}"
+    )
     prompt_payload = {
         "mode": interview.mode,
         "position": {
@@ -288,22 +340,30 @@ async def generate_plan(
         '{"objectives":["评估目标"],"sections":[{"name":"能力主题",'
         '"competencies":["能力点"],"difficulty":"MEDIUM","target_question_count":3}]}。'
     )
+    logger.info(f"Planner model request started: plan_id={plan.id}")
     async with AsyncOpenAI(
         api_key=settings.OPENAI_API_KEY,
         base_url=settings.OPENAI_BASE_URL,
         timeout=60.0,
         max_retries=0,
     ) as client:
-        response = await client.chat.completions.create(
-            model=settings.LLM_MODEL,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": json.dumps(prompt_payload, ensure_ascii=False)},
-            ],
-            response_format={"type": "json_object"},
-        )
+        async with ai_concurrency_slot("planner", settings.LLM_MODEL):
+            response = await client.chat.completions.create(
+                model=settings.LLM_MODEL,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": json.dumps(prompt_payload, ensure_ascii=False)},
+                ],
+                response_format={"type": "json_object"},
+            )
+    logger.info(f"Planner model response received: plan_id={plan.id}")
     content = response.choices[0].message.content or ""
     generated = GeneratedPlan.model_validate(parse_json_content(content))
+    await session.refresh(plan, attribute_names=["status"])
+    await session.refresh(interview, attribute_names=["status"])
+    if plan.status != "DRAFT" or interview.status != "PLANNING":
+        logger.info(f"Planner persistence skipped after cancellation: plan_id={plan.id}")
+        return
     plan.objectives = generated.objectives
     plan.sections = [section.model_dump() for section in generated.sections]
     plan.model_name = settings.LLM_MODEL
@@ -313,3 +373,4 @@ async def generate_plan(
     plan.error_message = None
     interview.status = "READY"
     await session.commit()
+    logger.info(f"Planner state persisted as READY: plan_id={plan.id}")

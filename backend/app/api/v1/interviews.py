@@ -1,5 +1,7 @@
 import uuid
 from datetime import datetime, timedelta, timezone
+from time import perf_counter
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import and_, delete as sql_delete, func, or_, select
@@ -7,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user
+from app.core.config import settings
 from app.core.permissions import require_workspace_role
 from app.db.models.document import Document
 from app.db.models.interview import (
@@ -14,10 +17,14 @@ from app.db.models.interview import (
     InterviewAnswer,
     InterviewEvaluation,
     InterviewPlan,
+    InterviewPlanRevision,
+    InterviewQualityAudit,
     InterviewQuestion,
     InterviewSession,
+    InterviewTurnCritique,
     JobPosition,
 )
+from app.db.models.interview_decision import InterviewDecision
 from app.db.models.knowledge_base import KnowledgeBase
 from app.db.models.recruitment import JobApplication, MessageThread, PlatformMessage
 from app.db.models.user import AppUser
@@ -29,22 +36,34 @@ from app.schemas.interview import (
     CandidateProfileUpdateRequest,
     InterviewAnswerSubmitRequest,
     InterviewEvaluationResponse,
+    InterviewObservabilityResponse,
     InterviewSessionCreateRequest,
     InterviewSessionResponse,
     InterviewSessionUpdateRequest,
     InterviewPlanResponse,
+    InterviewPlanRevisionResponse,
     InterviewQuestionResponse,
+    InterviewQualityAuditResponse,
     InterviewRuntimeQuestionResponse,
     InterviewRuntimeResponse,
+    InterviewTurnCritiqueResponse,
     JobPositionCreateRequest,
     JobPositionResponse,
     JobPositionUpdateRequest,
 )
 from app.services.interview_conductor import (
     CONDUCTOR_PROMPT_VERSION,
-    GeneratedTurn,
-    generate_next_turn,
+    is_single_question,
 )
+from app.services.ai_observability import elapsed_ms
+from app.services.interview_agent_graph import (
+    finish_interview_runtime_agent_graph,
+    run_interview_turn_agent_graph,
+)
+from app.services.interview_checkpointing import delete_interview_checkpoints
+from app.services.interview_observability import build_interview_observability
+from app.services.interview_quality_audit import generate_interview_quality_audit
+from app.services.interview_report_pdf import build_interview_report_pdf
 from app.workers.interview_tasks import generate_interview_evaluation, generate_interview_plan
 
 
@@ -54,6 +73,49 @@ READ_ROLES = {"OWNER", "ADMIN", "HR", "INTERVIEWER", "VIEWER"}
 WRITE_ROLES = {"OWNER", "ADMIN", "HR"}
 PLAN_ROLES = {"OWNER", "ADMIN", "HR", "INTERVIEWER"}
 EXECUTE_ROLES = {"OWNER", "ADMIN", "HR", "INTERVIEWER"}
+
+
+async def fail_stale_planning_sessions(
+    session: AsyncSession,
+    workspace_id: uuid.UUID,
+) -> None:
+    cutoff = datetime.now(timezone.utc) - timedelta(
+        seconds=settings.INTERVIEW_PLAN_STALE_SECONDS
+    )
+    rows = (
+        await session.execute(
+            select(InterviewPlan, InterviewSession)
+            .join(
+                InterviewSession,
+                InterviewSession.id == InterviewPlan.interview_session_id,
+            )
+            .where(
+                InterviewSession.workspace_id == workspace_id,
+                InterviewSession.status == "PLANNING",
+                InterviewPlan.status == "DRAFT",
+            )
+            .order_by(
+                InterviewPlan.interview_session_id,
+                InterviewPlan.version.desc(),
+            )
+        )
+    ).all()
+    changed = False
+    seen_interviews: set[uuid.UUID] = set()
+    for plan, interview in rows:
+        if interview.id in seen_interviews:
+            continue
+        seen_interviews.add(interview.id)
+        if plan.created_at > cutoff:
+            continue
+        plan.status = "FAILED"
+        plan.error_message = (
+            f"计划生成超过 {settings.INTERVIEW_PLAN_STALE_SECONDS} 秒，已自动终止"
+        )
+        interview.status = "FAILED"
+        changed = True
+    if changed:
+        await session.commit()
 
 
 async def validate_knowledge_base(
@@ -108,29 +170,38 @@ async def validate_resume_document(
     return document
 
 
-async def validate_personal_reference_knowledge_bases(
+async def validate_reference_knowledge_bases(
     session: AsyncSession,
     workspace_id: uuid.UUID,
     knowledge_base_ids: list[uuid.UUID],
+    user_id: uuid.UUID,
+    *,
+    can_access_all_private: bool,
 ) -> list[uuid.UUID]:
     unique_ids = list(dict.fromkeys(knowledge_base_ids))
     if not unique_ids:
         return []
+    statement = select(KnowledgeBase.id).where(
+        KnowledgeBase.id.in_(unique_ids),
+        KnowledgeBase.workspace_id == workspace_id,
+        KnowledgeBase.purpose != "RESUME",
+    )
+    if not can_access_all_private:
+        statement = statement.where(
+            or_(
+                KnowledgeBase.visibility == "WORKSPACE",
+                KnowledgeBase.created_by == user_id,
+            )
+        )
     matched_ids = set(
         (
-            await session.scalars(
-                select(KnowledgeBase.id).where(
-                    KnowledgeBase.id.in_(unique_ids),
-                    KnowledgeBase.workspace_id == workspace_id,
-                    KnowledgeBase.purpose == "PERSONAL_LEARNING",
-                )
-            )
+            await session.scalars(statement)
         ).all()
     )
     if matched_ids != set(unique_ids):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="面试参考资料必须是当前个人工作空间中的个人学习知识库",
+            detail="面试参考资料只能选择当前工作空间中可访问的非简历知识库",
         )
     return unique_ids
 
@@ -213,6 +284,7 @@ def plan_response(
                 max_score=float(question.max_score),
                 expected_points=question.expected_points,
                 source_evidence=question.source_evidence,
+                decision_metadata=question.decision_metadata,
             )
             for question in questions
         ],
@@ -221,6 +293,8 @@ def plan_response(
 
 def evaluation_response(
     evaluation: InterviewEvaluation,
+    critiques: list[InterviewTurnCritique] | None = None,
+    revisions: list[InterviewPlanRevision] | None = None,
 ) -> InterviewEvaluationResponse:
     return InterviewEvaluationResponse(
         id=evaluation.id,
@@ -243,6 +317,73 @@ def evaluation_response(
         reviewed_at=evaluation.reviewed_at,
         created_at=evaluation.created_at,
         updated_at=evaluation.updated_at,
+        turn_critiques=[
+            critique_response(critique) for critique in (critiques or [])
+        ],
+        plan_revisions=[
+            plan_revision_response(revision) for revision in (revisions or [])
+        ],
+    )
+
+
+def critique_response(
+    critique: InterviewTurnCritique,
+) -> InterviewTurnCritiqueResponse:
+    return InterviewTurnCritiqueResponse(
+        id=critique.id,
+        interview_question_id=critique.interview_question_id,
+        score=float(critique.score),
+        strengths=list(critique.strengths),
+        knowledge_gaps=list(critique.knowledge_gaps),
+        answer_evidence=list(critique.answer_evidence),
+        next_action=critique.next_action,
+        difficulty_delta=critique.difficulty_delta,
+        confidence=float(critique.confidence),
+        reason=critique.reason,
+        decision_source=critique.decision_source,
+        model_name=critique.model_name,
+        prompt_version=critique.prompt_version,
+        created_at=critique.created_at,
+    )
+
+
+def plan_revision_response(
+    revision: InterviewPlanRevision,
+) -> InterviewPlanRevisionResponse:
+    return InterviewPlanRevisionResponse(
+        id=revision.id,
+        source_critique_id=revision.source_critique_id,
+        version=revision.version,
+        action=revision.action,
+        target_competency=revision.target_competency,
+        target_difficulty=revision.target_difficulty,
+        covered_competencies=list(revision.covered_competencies),
+        priority_competencies=list(revision.priority_competencies),
+        knowledge_gaps=list(revision.knowledge_gaps),
+        rationale=revision.rationale,
+        workflow_trace=list(revision.workflow_trace),
+        before_snapshot=dict(revision.before_snapshot),
+        after_snapshot=dict(revision.after_snapshot),
+        change_set=dict(revision.change_set),
+        remaining_question_budget=revision.remaining_question_budget,
+        competency_budget=dict(revision.competency_budget),
+        created_at=revision.created_at,
+    )
+
+
+def quality_audit_response(
+    audit: InterviewQualityAudit,
+) -> InterviewQualityAuditResponse:
+    return InterviewQualityAuditResponse(
+        id=audit.id,
+        interview_session_id=audit.interview_session_id,
+        audit_version=audit.audit_version,
+        passed=audit.passed,
+        metrics=dict(audit.metrics),
+        quality_gates=list(audit.quality_gates),
+        warnings=list(audit.warnings),
+        generated_at=audit.generated_at,
+        created_at=audit.created_at,
     )
 
 
@@ -287,17 +428,57 @@ async def generate_and_activate_next_question(
     interview: InterviewSession,
     user: AppUser,
 ) -> InterviewQuestion | None:
-    turn: GeneratedTurn = await generate_next_turn(session, interview, user)
-    if turn.action == "FINISH":
-        interview.status = "COMPLETED"
-        interview.completed_at = datetime.now(timezone.utc)
-        return None
+    activation_started_at = perf_counter()
     latest_question = await session.scalar(
         select(InterviewQuestion)
         .where(InterviewQuestion.interview_session_id == interview.id)
         .order_by(InterviewQuestion.order_no.desc())
         .limit(1)
     )
+    latest_answer = None
+    if latest_question is not None and latest_question.status == "ANSWERED":
+        latest_answer = await session.scalar(
+            select(InterviewAnswer).where(
+                InterviewAnswer.interview_question_id == latest_question.id
+            )
+        )
+        if latest_answer is not None:
+            # The resume checkpoint stores the answer ID before Critic runs.
+            await session.commit()
+            await session.scalar(
+                select(InterviewSession)
+                .where(InterviewSession.id == interview.id)
+                .with_for_update()
+            )
+    elif latest_question is not None and latest_question.status == "SKIPPED":
+        # A skipped turn has no Reviser node to commit it before the next model.
+        await session.commit()
+        await session.scalar(
+            select(InterviewSession)
+            .where(InterviewSession.id == interview.id)
+            .with_for_update()
+        )
+    turn, _ = await run_interview_turn_agent_graph(
+        session,
+        interview,
+        user,
+        question=latest_question,
+        answer=latest_answer,
+    )
+    if turn.action == "FINISH":
+        interview.status = "COMPLETED"
+        interview.completed_at = datetime.now(timezone.utc)
+        return None
+    turn_observability = dict(turn.observability or {})
+    turn_observability["activation_total_latency_ms"] = elapsed_ms(
+        activation_started_at
+    )
+    question_content = (turn.content or "").strip()
+    if not is_single_question(question_content):
+        question_content = (
+            f"你在{turn.competency or '当前主题'}中最关键的一项实践是什么？"
+        )
+        turn_observability["single_question_guard"] = "fallback_replaced"
     next_order = (latest_question.order_no if latest_question else 0) + 1
     interview_plan_id = latest_question.interview_plan_id if latest_question else None
     if interview_plan_id is None:
@@ -316,7 +497,7 @@ async def generate_and_activate_next_question(
         parent_question_id=(latest_question.id if turn.is_follow_up and latest_question else None),
         order_no=next_order,
         question_type="FOLLOW_UP" if turn.is_follow_up else (turn.question_type or "TECHNICAL"),
-        content=turn.content or "请结合实际经历说明你的解决思路。",
+        content=question_content,
         competency=turn.competency,
         difficulty=turn.difficulty or "MEDIUM",
         generated_by="FOLLOW_UP" if turn.is_follow_up else "PLAN",
@@ -331,6 +512,10 @@ async def generate_and_activate_next_question(
             "prompt_version": CONDUCTOR_PROMPT_VERSION,
             "retrieval_grade": turn.retrieval_grade or {},
             "retrieval_trace": turn.retrieval_trace or [],
+            "critic_id": turn.critic_id,
+            "plan_revision_id": turn.plan_revision_id,
+            "adaptive_action": turn.adaptive_action,
+            "observability": turn_observability,
         },
         asked_at=datetime.now(timezone.utc),
     )
@@ -338,6 +523,24 @@ async def generate_and_activate_next_question(
     await session.flush()
     interview.current_question_order = question.order_no
     return question
+
+
+async def ensure_next_question_after_submitted_answer(
+    session: AsyncSession,
+    interview: InterviewSession,
+    user: AppUser,
+) -> InterviewQuestion | None:
+    current_question = await session.scalar(
+        select(InterviewQuestion).where(
+            InterviewQuestion.interview_session_id == interview.id,
+            InterviewQuestion.status == "ASKED",
+        )
+    )
+    if interview.status == "IN_PROGRESS" and current_question is None:
+        return await generate_and_activate_next_question(
+            session, interview, user
+        )
+    return current_question
 
 
 async def runtime_response(
@@ -382,6 +585,38 @@ async def runtime_response(
             generated_by=current_question.generated_by,
             asked_at=current_question.asked_at,
         )
+    latest_critique = None
+    latest_revision = None
+    if interview.mode == "MOCK":
+        latest_critique = await session.scalar(
+            select(InterviewTurnCritique)
+            .where(InterviewTurnCritique.interview_session_id == interview.id)
+            .order_by(InterviewTurnCritique.created_at.desc())
+            .limit(1)
+        )
+        latest_revision = await session.scalar(
+            select(InterviewPlanRevision)
+            .where(InterviewPlanRevision.interview_session_id == interview.id)
+            .order_by(InterviewPlanRevision.version.desc())
+            .limit(1)
+        )
+    evaluation_status = None
+    decision_value = None
+    decided_at = None
+    if interview.mode == "ENTERPRISE":
+        evaluation_status = await session.scalar(
+            select(InterviewEvaluation.status).where(
+                InterviewEvaluation.interview_session_id == interview.id
+            )
+        )
+        decision = await session.scalar(
+            select(InterviewDecision).where(
+                InterviewDecision.interview_session_id == interview.id
+            )
+        )
+        if decision is not None:
+            decision_value = decision.decision
+            decided_at = decision.decided_at
     time_limit_minutes = int(
         interview.configuration.get("question_time_limit_minutes", 10)
     )
@@ -399,6 +634,13 @@ async def runtime_response(
         completed_at=interview.completed_at,
         follow_up_generated=follow_up_generated,
         question_timed_out=question_timed_out,
+        last_turn_feedback=(
+            critique_response(latest_critique) if latest_critique else None
+        ),
+        adaptive_plan_version=(latest_revision.version if latest_revision else None),
+        evaluation_status=evaluation_status,
+        decision=decision_value,
+        decided_at=decided_at,
     )
 
 
@@ -655,6 +897,7 @@ async def list_interviews(
     session: AsyncSession = Depends(get_db_session),
 ) -> list[InterviewSessionResponse]:
     await require_workspace_role(session, workspace_id, current_user.id, READ_ROLES)
+    await fail_stale_planning_sessions(session, workspace_id)
     rows = (
         await session.execute(
             select(InterviewSession, JobPosition, CandidateProfile)
@@ -674,7 +917,7 @@ async def create_interview(
     current_user: AppUser = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ) -> InterviewSessionResponse:
-    workspace, _ = await require_workspace_role(
+    workspace, membership = await require_workspace_role(
         session, workspace_id, current_user.id, WRITE_ROLES
     )
     position = await session.scalar(
@@ -693,6 +936,12 @@ async def create_interview(
     )
     if position is None or candidate is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="岗位或候选人不可用")
+
+    if workspace.type == "ORGANIZATION" and request.application_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="企业面试必须关联候选人的岗位申请",
+        )
 
     if request.application_id is not None:
         application = await session.scalar(
@@ -718,19 +967,15 @@ async def create_interview(
     await validate_resume_document(session, workspace_id, candidate.resume_document_id)
 
     interviewer_id = request.interviewer_id
-    reference_knowledge_base_ids: list[uuid.UUID] = []
+    reference_knowledge_base_ids = await validate_reference_knowledge_bases(
+        session,
+        workspace_id,
+        request.reference_knowledge_base_ids,
+        current_user.id,
+        can_access_all_private=membership.role in {"OWNER", "ADMIN"},
+    )
     if workspace.type == "PERSONAL":
         interviewer_id = None
-        reference_knowledge_base_ids = await validate_personal_reference_knowledge_bases(
-            session,
-            workspace_id,
-            request.reference_knowledge_base_ids,
-        )
-    elif request.reference_knowledge_base_ids:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="企业面试不能使用个人面试参考资料",
-        )
     else:
         await validate_interviewer(session, workspace_id, interviewer_id)
 
@@ -864,6 +1109,51 @@ async def create_interview_plan(
     return plan_response(plan, [])
 
 
+@router.post(
+    "/interviews/{interview_id}/plan/cancel",
+    response_model=InterviewPlanResponse,
+)
+async def cancel_interview_plan(
+    workspace_id: uuid.UUID,
+    interview_id: uuid.UUID,
+    current_user: AppUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> InterviewPlanResponse:
+    _, membership = await require_workspace_role(
+        session, workspace_id, current_user.id, PLAN_ROLES
+    )
+    interview = await session.scalar(
+        select(InterviewSession)
+        .where(
+            InterviewSession.id == interview_id,
+            InterviewSession.workspace_id == workspace_id,
+        )
+        .with_for_update()
+    )
+    if interview is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="面试不存在")
+    if membership.role == "INTERVIEWER" and interview.interviewer_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="只能取消分配给自己的面试计划")
+    plan = await session.scalar(
+        select(InterviewPlan)
+        .where(InterviewPlan.interview_session_id == interview.id)
+        .order_by(InterviewPlan.version.desc())
+        .limit(1)
+        .with_for_update()
+    )
+    if interview.status != "PLANNING" or plan is None or plan.status != "DRAFT":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="当前没有正在生成的面试计划",
+        )
+    plan.status = "FAILED"
+    plan.error_message = "用户已取消面试计划生成"
+    interview.status = "FAILED"
+    await session.commit()
+    await session.refresh(plan)
+    return plan_response(plan, [])
+
+
 @router.get("/interviews/{interview_id}/plan", response_model=InterviewPlanResponse)
 async def get_interview_plan(
     workspace_id: uuid.UUID,
@@ -898,6 +1188,39 @@ async def get_interview_plan(
         ).all()
     )
     return plan_response(plan, questions)
+
+
+@router.get(
+    "/interviews/{interview_id}/observability",
+    response_model=InterviewObservabilityResponse,
+)
+async def get_interview_observability(
+    workspace_id: uuid.UUID,
+    interview_id: uuid.UUID,
+    current_user: AppUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> InterviewObservabilityResponse:
+    await require_workspace_role(session, workspace_id, current_user.id, READ_ROLES)
+    interview = await session.scalar(
+        select(InterviewSession).where(
+            InterviewSession.id == interview_id,
+            InterviewSession.workspace_id == workspace_id,
+        )
+    )
+    if interview is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="面试不存在")
+    questions = list(
+        (
+            await session.scalars(
+                select(InterviewQuestion)
+                .where(InterviewQuestion.interview_session_id == interview_id)
+                .order_by(InterviewQuestion.order_no)
+            )
+        ).all()
+    )
+    return InterviewObservabilityResponse.model_validate(
+        build_interview_observability(interview_id, questions)
+    )
 
 
 @router.post("/interviews/{interview_id}/start", response_model=InterviewRuntimeResponse)
@@ -960,6 +1283,9 @@ async def get_interview_runtime(
         await generate_and_activate_next_question(session, interview, current_user)
         await session.commit()
         return await runtime_response(session, interview, question_timed_out=True)
+    if interview.status == "IN_PROGRESS" and current_question is None:
+        await generate_and_activate_next_question(session, interview, current_user)
+        await session.commit()
     return await runtime_response(session, interview)
 
 
@@ -979,6 +1305,8 @@ async def submit_interview_answer(
         session, workspace_id, interview_id, current_user, for_update=True
     )
     reject_enterprise_execution_for_application(interview)
+    if interview.status == "COMPLETED":
+        return await runtime_response(session, interview)
     if interview.status != "IN_PROGRESS":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -989,12 +1317,34 @@ async def submit_interview_answer(
         .where(
             InterviewQuestion.id == question_id,
             InterviewQuestion.interview_session_id == interview.id,
-            InterviewQuestion.order_no == interview.current_question_order,
-            InterviewQuestion.status == "ASKED",
         )
         .with_for_update()
     )
     if question is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="问题不存在或不属于当前面试",
+        )
+    if question.status == "ANSWERED":
+        existing_answer = await session.scalar(
+            select(InterviewAnswer).where(
+                InterviewAnswer.interview_question_id == question.id
+            )
+        )
+        if existing_answer is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="回答状态异常，请刷新面试页面",
+            )
+        await ensure_next_question_after_submitted_answer(
+            session, interview, current_user
+        )
+        await session.commit()
+        return await runtime_response(session, interview)
+    if (
+        question.order_no != interview.current_question_order
+        or question.status != "ASKED"
+    ):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="只能回答当前问题",
@@ -1106,6 +1456,7 @@ async def finish_interview(
     interview.status = "COMPLETED"
     interview.completed_at = datetime.now(timezone.utc)
     await session.commit()
+    await finish_interview_runtime_agent_graph(session, interview)
     return await runtime_response(session, interview)
 
 
@@ -1200,7 +1551,172 @@ async def get_interview_evaluation(
     )
     if evaluation is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="评估报告尚未生成")
-    return evaluation_response(evaluation)
+    critiques = list(
+        (
+            await session.scalars(
+                select(InterviewTurnCritique)
+                .where(InterviewTurnCritique.interview_session_id == interview.id)
+                .order_by(InterviewTurnCritique.created_at)
+            )
+        ).all()
+    )
+    revisions = list(
+        (
+            await session.scalars(
+                select(InterviewPlanRevision)
+                .where(InterviewPlanRevision.interview_session_id == interview.id)
+                .order_by(InterviewPlanRevision.version)
+            )
+        ).all()
+    )
+    return evaluation_response(evaluation, critiques, revisions)
+
+
+@router.get("/interviews/{interview_id}/evaluation/pdf")
+async def download_interview_evaluation_pdf(
+    workspace_id: uuid.UUID,
+    interview_id: uuid.UUID,
+    current_user: AppUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> Response:
+    await require_workspace_role(session, workspace_id, current_user.id, READ_ROLES)
+    row = (
+        await session.execute(
+            select(InterviewSession, InterviewEvaluation, CandidateProfile, JobPosition)
+            .join(
+                InterviewEvaluation,
+                InterviewEvaluation.interview_session_id == InterviewSession.id,
+            )
+            .join(CandidateProfile, CandidateProfile.id == InterviewSession.candidate_profile_id)
+            .join(JobPosition, JobPosition.id == InterviewSession.job_position_id)
+            .where(
+                InterviewSession.id == interview_id,
+                InterviewSession.workspace_id == workspace_id,
+            )
+        )
+    ).one_or_none()
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="评估报告不存在",
+        )
+    interview, evaluation, candidate, position = row
+    if evaluation.status != "COMPLETED":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="评估报告完成后才能下载",
+        )
+    critiques = list(
+        (
+            await session.scalars(
+                select(InterviewTurnCritique)
+                .where(InterviewTurnCritique.interview_session_id == interview.id)
+                .order_by(InterviewTurnCritique.created_at)
+            )
+        ).all()
+    )
+    revisions = list(
+        (
+            await session.scalars(
+                select(InterviewPlanRevision)
+                .where(InterviewPlanRevision.interview_session_id == interview.id)
+                .order_by(InterviewPlanRevision.version)
+            )
+        ).all()
+    )
+    quality_audit = await session.scalar(
+        select(InterviewQualityAudit).where(
+            InterviewQualityAudit.interview_session_id == interview.id
+        )
+    )
+    pdf = build_interview_report_pdf(
+        evaluation=evaluation,
+        candidate_name=candidate.full_name,
+        job_title=position.title,
+        completed_at=interview.completed_at,
+        critiques=critiques,
+        revisions=revisions,
+        quality_audit=quality_audit,
+    )
+    filename = quote(f"{candidate.full_name}-{position.title}-面试评估报告.pdf")
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{filename}"},
+    )
+
+
+@router.get(
+    "/interviews/{interview_id}/quality-audit",
+    response_model=InterviewQualityAuditResponse,
+)
+async def get_interview_quality_audit(
+    workspace_id: uuid.UUID,
+    interview_id: uuid.UUID,
+    current_user: AppUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> InterviewQualityAuditResponse:
+    await require_workspace_role(session, workspace_id, current_user.id, READ_ROLES)
+    audit = await session.scalar(
+        select(InterviewQualityAudit)
+        .join(
+            InterviewSession,
+            InterviewSession.id == InterviewQualityAudit.interview_session_id,
+        )
+        .where(
+            InterviewQualityAudit.interview_session_id == interview_id,
+            InterviewSession.workspace_id == workspace_id,
+        )
+        .order_by(InterviewQualityAudit.generated_at.desc())
+        .limit(1)
+    )
+    if audit is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="面试业务质量审计尚未生成",
+        )
+    return quality_audit_response(audit)
+
+
+@router.post(
+    "/interviews/{interview_id}/quality-audit",
+    response_model=InterviewQualityAuditResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_interview_quality_audit(
+    workspace_id: uuid.UUID,
+    interview_id: uuid.UUID,
+    current_user: AppUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> InterviewQualityAuditResponse:
+    await require_workspace_role(session, workspace_id, current_user.id, PLAN_ROLES)
+    interview = await session.scalar(
+        select(InterviewSession)
+        .where(
+            InterviewSession.id == interview_id,
+            InterviewSession.workspace_id == workspace_id,
+        )
+        .with_for_update()
+    )
+    if interview is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="面试不存在")
+    evaluation = await session.scalar(
+        select(InterviewEvaluation).where(
+            InterviewEvaluation.interview_session_id == interview.id,
+            InterviewEvaluation.status == "COMPLETED",
+        )
+    )
+    if interview.status != "COMPLETED" or evaluation is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="面试和评估报告完成后才能生成业务质量审计",
+        )
+    audit = await generate_interview_quality_audit(
+        session, interview, evaluation
+    )
+    await session.commit()
+    await session.refresh(audit)
+    return quality_audit_response(audit)
 
 
 @router.delete("/interviews/{interview_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -1255,4 +1771,5 @@ async def delete_interview(
         sql_delete(InterviewSession).where(InterviewSession.id == interview.id)
     )
     await session.commit()
+    await delete_interview_checkpoints(interview.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

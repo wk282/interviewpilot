@@ -39,6 +39,7 @@ export interface PublicInterviewInvitation {
   scheduled_at: string | null
   expires_at: string
   status: string
+  evaluation_status: 'PENDING' | 'GENERATING' | 'COMPLETED' | 'FAILED' | null
   decision: 'HIRED' | 'REJECTED' | null
   decided_at: string | null
 }

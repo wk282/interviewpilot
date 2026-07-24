@@ -7,6 +7,8 @@ import type {
   InterviewPlan,
   InterviewAnswerSubmitRequest,
   InterviewEvaluation,
+  InterviewObservability,
+  InterviewQualityAudit,
   InterviewRuntime,
   JobPosition,
   JobPositionCreateRequest,
@@ -95,9 +97,23 @@ export async function generateInterviewPlan(workspaceId: string, interviewId: st
   return response.data
 }
 
+export async function cancelInterviewPlan(workspaceId: string, interviewId: string) {
+  const response = await apiClient.post<InterviewPlan>(
+    `${workspacePath(workspaceId)}/interviews/${interviewId}/plan/cancel`,
+  )
+  return response.data
+}
+
 export async function getInterviewPlan(workspaceId: string, interviewId: string) {
   const response = await apiClient.get<InterviewPlan>(
     `${workspacePath(workspaceId)}/interviews/${interviewId}/plan`,
+  )
+  return response.data
+}
+
+export async function getInterviewObservability(workspaceId: string, interviewId: string) {
+  const response = await apiClient.get<InterviewObservability>(
+    `${workspacePath(workspaceId)}/interviews/${interviewId}/observability`,
   )
   return response.data
 }
@@ -165,6 +181,42 @@ export async function createInterviewEvaluation(workspaceId: string, interviewId
 export async function getInterviewEvaluation(workspaceId: string, interviewId: string) {
   const response = await apiClient.get<InterviewEvaluation>(
     `${workspacePath(workspaceId)}/interviews/${interviewId}/evaluation`,
+  )
+  return response.data
+}
+
+export async function downloadInterviewEvaluationPdf(
+  workspaceId: string,
+  interviewId: string,
+) {
+  const response = await apiClient.get<Blob>(
+    `${workspacePath(workspaceId)}/interviews/${interviewId}/evaluation/pdf`,
+    { responseType: 'blob' },
+  )
+  const objectUrl = URL.createObjectURL(response.data)
+  const anchor = document.createElement('a')
+  const disposition = response.headers['content-disposition'] as string | undefined
+  const encodedFilename = disposition?.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
+  anchor.href = objectUrl
+  anchor.download = encodedFilename
+    ? decodeURIComponent(encodedFilename)
+    : `interview-evaluation-${interviewId}.pdf`
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  URL.revokeObjectURL(objectUrl)
+}
+
+export async function getInterviewQualityAudit(workspaceId: string, interviewId: string) {
+  const response = await apiClient.get<InterviewQualityAudit>(
+    `${workspacePath(workspaceId)}/interviews/${interviewId}/quality-audit`,
+  )
+  return response.data
+}
+
+export async function createInterviewQualityAudit(workspaceId: string, interviewId: string) {
+  const response = await apiClient.post<InterviewQualityAudit>(
+    `${workspacePath(workspaceId)}/interviews/${interviewId}/quality-audit`,
   )
   return response.data
 }

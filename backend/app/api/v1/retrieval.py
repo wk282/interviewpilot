@@ -24,6 +24,7 @@ from app.schemas.retrieval import (
 )
 from app.services.bm25_store import OpenSearchBM25Store
 from app.services.reranker import ZhipuReranker
+from app.services.ai_concurrency import ai_concurrency_slot
 
 
 router = APIRouter(
@@ -40,19 +41,34 @@ TRIGRAM_PROFILES = {
     "VECTOR_TRIGRAM_RERANK",
     "VECTOR_TRIGRAM_BM25",
     "VECTOR_TRIGRAM_BM25_RERANK",
+    "VECTOR_TRIGRAM_BM25_RRF",
+    "VECTOR_TRIGRAM_BM25_RRF_RERANK",
 }
 BM25_PROFILES = {
     "VECTOR_BM25",
     "VECTOR_BM25_RERANK",
     "VECTOR_TRIGRAM_BM25",
     "VECTOR_TRIGRAM_BM25_RERANK",
+    "VECTOR_BM25_RRF",
+    "VECTOR_BM25_RRF_RERANK",
+    "VECTOR_TRIGRAM_BM25_RRF",
+    "VECTOR_TRIGRAM_BM25_RRF_RERANK",
 }
 RERANK_PROFILES = {
     "VECTOR_RERANK",
     "VECTOR_TRIGRAM_RERANK",
     "VECTOR_BM25_RERANK",
     "VECTOR_TRIGRAM_BM25_RERANK",
+    "VECTOR_BM25_RRF_RERANK",
+    "VECTOR_TRIGRAM_BM25_RRF_RERANK",
 }
+RRF_PROFILES = {
+    "VECTOR_BM25_RRF",
+    "VECTOR_BM25_RRF_RERANK",
+    "VECTOR_TRIGRAM_BM25_RRF",
+    "VECTOR_TRIGRAM_BM25_RRF_RERANK",
+}
+
 
 
 @dataclass
@@ -95,11 +111,15 @@ async def create_query_embedding(query: str) -> list[float]:
             api_key=settings.EMBEDDING_API_KEY or settings.OPENAI_API_KEY,
             base_url=settings.EMBEDDING_BASE_URL or settings.OPENAI_BASE_URL,
         ) as client:
-            response = await client.embeddings.create(
-                model=settings.EMBEDDING_MODEL_NAME,
-                input=[query],
-                dimensions=settings.EMBEDDING_DIMENSIONS,
-            )
+            async with ai_concurrency_slot(
+                "query_embedding",
+                settings.EMBEDDING_MODEL_NAME,
+            ):
+                response = await client.embeddings.create(
+                    model=settings.EMBEDDING_MODEL_NAME,
+                    input=[query],
+                    dimensions=settings.EMBEDDING_DIMENSIONS,
+                )
     except Exception as error:
         logger.warning(f"Failed to embed retrieval query: {error}")
         raise HTTPException(
@@ -354,7 +374,23 @@ async def retrieve_knowledge_base(
     if request.profile in BM25_PROFILES:
         normalized_scores["BM25"] = normalize_scores(bm25_scores, valid_ids)
         active_channels.append("BM25")
-    total_weight = sum(FUSION_WEIGHTS[channel] for channel in active_channels)
+
+    # 【判定融合策略】：若 Profile 显式指定 RRF 则走 RRF 排名倒数求和，否则走 Min-Max 加权求和
+    is_rrf = request.profile in RRF_PROFILES
+    if is_rrf:
+        k_rrf = 60
+        channel_ranks: dict[str, dict[uuid.UUID, int]] = {}
+        if "VECTOR" in active_channels:
+            v_order = sorted(valid_ids, key=lambda cid: vector_scores.get(cid, 0.0), reverse=True)
+            channel_ranks["VECTOR"] = {cid: rank for rank, cid in enumerate(v_order, start=1)}
+        if "TRIGRAM" in active_channels:
+            t_order = sorted(valid_ids, key=lambda cid: trigram_scores.get(cid, 0.0), reverse=True)
+            channel_ranks["TRIGRAM"] = {cid: rank for rank, cid in enumerate(t_order, start=1)}
+        if "BM25" in active_channels:
+            b_order = sorted(valid_ids, key=lambda cid: bm25_scores.get(cid, 0.0), reverse=True)
+            channel_ranks["BM25"] = {cid: rank for rank, cid in enumerate(b_order, start=1)}
+    else:
+        total_weight = sum(FUSION_WEIGHTS[channel] for channel in active_channels)
 
     candidate_scores: dict[uuid.UUID, CandidateScore] = {}
     for chunk_id in valid_ids:
@@ -371,12 +407,21 @@ async def retrieve_knowledge_base(
                 else None
             ),
         )
-        candidate.fusion_score = sum(
-            (FUSION_WEIGHTS[channel] / total_weight)
-            * normalized_scores[channel].get(chunk_id, 0.0)
-            for channel in active_channels
-        )
+        if is_rrf:
+            # RRF 融合得分: RRF_score = sum(1.0 / (60 + rank))
+            candidate.fusion_score = sum(
+                1.0 / (k_rrf + channel_ranks[channel][chunk_id])
+                for channel in active_channels
+            )
+        else:
+            # 加权归一化得分: sum(weight * norm_score)
+            candidate.fusion_score = sum(
+                (FUSION_WEIGHTS[channel] / total_weight)
+                * normalized_scores[channel].get(chunk_id, 0.0)
+                for channel in active_channels
+            )
         candidate_scores[chunk_id] = candidate
+
 
     ranked_ids = sorted(
         valid_ids,
@@ -412,12 +457,16 @@ async def retrieve_knowledge_base(
             details_by_id[chunk_id][0].content
             for chunk_id in rerank_ids
         ]
-        rerank_results = await asyncio.to_thread(
-            ZhipuReranker().rerank,
-            query,
-            rerank_documents,
-            request.top_k,
-        )
+        async with ai_concurrency_slot(
+            "retrieval_test_rerank",
+            settings.RERANK_MODEL_NAME,
+        ):
+            rerank_results = await asyncio.to_thread(
+                ZhipuReranker().rerank,
+                query,
+                rerank_documents,
+                request.top_k,
+            )
         for rerank_result in rerank_results:
             result_index = rerank_result.get("index")
             if not isinstance(result_index, int) or not 0 <= result_index < len(rerank_ids):

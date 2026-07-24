@@ -8,6 +8,7 @@ from openai import AsyncOpenAI
 from sqlalchemy import delete, func, select
 
 from app.core.config import settings
+from app.core.logger import logger
 from app.db.models.chunk import DocumentChunk
 from app.db.models.document import Document, DocumentVersion
 from app.db.models.ingestion import IngestionJob, IngestionStageRun
@@ -16,11 +17,15 @@ from app.db.session import AsyncSessionFactory, engine
 from app.services.document_parsers import build_quality_report, parser_for
 from app.services.bm25_store import OpenSearchBM25Store
 from app.services.hierarchical_chunker import HierarchicalChunker
+from app.services.ai_concurrency import ai_concurrency_slot
 from app.workers.celery_app import celery_app
 
 
 class IngestionCancelled(Exception):
     pass
+
+
+SUPPORTED_INGESTION_EXTENSIONS = {".md", ".txt", ".docx", ".pdf"}
 
 
 async def start_stage(session, job: IngestionJob, stage: str, progress: int) -> IngestionStageRun:
@@ -45,6 +50,10 @@ async def start_stage(session, job: IngestionJob, stage: str, progress: int) -> 
     )
     session.add(stage_run)
     await session.commit()
+    logger.info(
+        f"Ingestion stage started | job_id={job.id} | stage={stage} | "
+        f"attempt={stage_run.attempt_no} | progress={progress}"
+    )
     return stage_run
 
 
@@ -53,6 +62,10 @@ async def finish_stage(session, stage_run: IngestionStageRun, metrics: dict | No
     stage_run.metrics = metrics
     stage_run.completed_at = datetime.now(timezone.utc)
     await session.commit()
+    logger.info(
+        f"Ingestion stage completed | job_id={stage_run.ingestion_job_id} | "
+        f"stage={stage_run.stage} | attempt={stage_run.attempt_no} | metrics={metrics or {}}"
+    )
 
 
 async def embed_and_index_chunks(
@@ -61,6 +74,10 @@ async def embed_and_index_chunks(
     document: Document,
     version: DocumentVersion,
 ) -> None:
+    logger.info(
+        f"Embedding pipeline started | job_id={job.id} | "
+        f"document_id={document.id} | version_id={version.id}"
+    )
     embedding_stage = await start_stage(session, job, "EMBEDDING", 60)
     chunks = list(
         (
@@ -82,13 +99,23 @@ async def embed_and_index_chunks(
         base_url=settings.EMBEDDING_BASE_URL or settings.OPENAI_BASE_URL,
     )
     embedded_at = datetime.now(timezone.utc)
+    embedding_queue_wait_ms = 0
     for offset in range(0, len(chunks), settings.EMBEDDING_BATCH_SIZE):
         batch = chunks[offset : offset + settings.EMBEDDING_BATCH_SIZE]
-        response = await client.embeddings.create(
-            model=settings.EMBEDDING_MODEL_NAME,
-            input=[chunk.content for chunk in batch],
-            dimensions=settings.EMBEDDING_DIMENSIONS,
+        logger.info(
+            f"Embedding batch started | job_id={job.id} | offset={offset} | "
+            f"batch_size={len(batch)} | total_chunks={len(chunks)}"
         )
+        async with ai_concurrency_slot(
+            "document_embedding",
+            settings.EMBEDDING_MODEL_NAME,
+        ) as concurrency:
+            response = await client.embeddings.create(
+                model=settings.EMBEDDING_MODEL_NAME,
+                input=[chunk.content for chunk in batch],
+                dimensions=settings.EMBEDDING_DIMENSIONS,
+            )
+        embedding_queue_wait_ms += concurrency.queue_wait_ms
         vectors = sorted(response.data, key=lambda item: item.index)
         if len(vectors) != len(batch):
             raise ValueError("Embedding API returned an incomplete batch")
@@ -109,6 +136,10 @@ async def embed_and_index_chunks(
             "embedded_chunk_count": len(chunks),
             "model": settings.EMBEDDING_MODEL_NAME,
             "dimensions": settings.EMBEDDING_DIMENSIONS,
+            "batch_count": (
+                len(chunks) + settings.EMBEDDING_BATCH_SIZE - 1
+            ) // settings.EMBEDDING_BATCH_SIZE,
+            "concurrency_queue_wait_ms": embedding_queue_wait_ms,
         },
     )
 
@@ -154,14 +185,28 @@ async def embed_and_index_chunks(
     version.status = "READY"
     document.status = "READY"
     await session.commit()
+    logger.info(
+        f"Ingestion completed | job_id={job.id} | document_id={document.id} | "
+        f"child_chunks={len(chunks)} | bm25_indexed={bm25_indexed_count}"
+    )
 
 
 async def process_ingestion_job(job_id: uuid.UUID) -> None:
+    logger.info(f"Ingestion job started | job_id={job_id}")
     async with AsyncSessionFactory() as session:
         job = await session.scalar(
             select(IngestionJob).where(IngestionJob.id == job_id).with_for_update()
         )
-        if job is None or job.status in {"RUNNING", "COMPLETED", "CANCELLED"}:
+        if job is None or job.status in {
+            "RUNNING",
+            "WAITING_OCR",
+            "COMPLETED",
+            "CANCELLED",
+        }:
+            logger.info(
+                f"Ingestion job skipped | job_id={job_id} | "
+                f"status={job.status if job else 'NOT_FOUND'}"
+            )
             return
 
         version = await session.get(DocumentVersion, job.document_version_id)
@@ -196,12 +241,10 @@ async def process_ingestion_job(job_id: uuid.UUID) -> None:
                     {"file_size": source_path.stat().st_size, "extension": source_path.suffix.lower()},
                 )
 
-                if source_path.suffix.lower() not in {".md", ".txt", ".docx"}:
-                    job.status = "PENDING"
-                    job.current_stage = "PARSING"
-                    job.progress = 10
-                    await session.commit()
-                    return
+                if source_path.suffix.lower() not in SUPPORTED_INGESTION_EXTENSIONS:
+                    raise ValueError(
+                        f"Unsupported document extension: {source_path.suffix.lower()}"
+                    )
 
                 parsing = await start_stage(session, job, "PARSING", 15)
                 parser = parser_for(source_path)
@@ -210,9 +253,53 @@ async def process_ingestion_job(job_id: uuid.UUID) -> None:
 
                 quality_check = await start_stage(session, job, "QUALITY_CHECK", 30)
                 quality_report = build_quality_report(parsed)
+                await finish_stage(session, quality_check, quality_report)
+                if quality_report.get("needs_ocr"):
+                    ocr_pages = quality_report.get("ocr_required_pages", [])
+                    job.status = "WAITING_OCR"
+                    job.current_stage = "OCR"
+                    job.progress = 30
+                    job.error_code = "OCR_REQUIRED"
+                    job.error_message = (
+                        f"PDF pages require OCR: {', '.join(str(page) for page in ocr_pages)}"
+                    )[:2000]
+                    job.completed_at = None
+                    version.parser_name = parser.name
+                    version.parser_version = parser.version
+                    version.quality_report = quality_report
+                    version.status = "OCR_PENDING"
+                    document.status = "OCR_PENDING"
+                    await session.commit()
+                    logger.info(
+                        f"Ingestion waiting for OCR | job_id={job.id} | "
+                        f"document_id={document.id} | pages={ocr_pages}"
+                    )
+                    if settings.OCR_WORKER_ENABLED:
+                        try:
+                            celery_app.send_task(
+                                "ocr.process_pdf",
+                                args=[str(job.id)],
+                                queue=settings.OCR_CELERY_QUEUE,
+                            )
+                            logger.info(
+                                f"OCR task queued | job_id={job.id} | "
+                                f"queue={settings.OCR_CELERY_QUEUE}"
+                            )
+                        except Exception as queue_error:
+                            job.status = "FAILED"
+                            job.error_code = "OCR_QUEUE_UNAVAILABLE"
+                            job.error_message = str(queue_error)[:2000]
+                            job.completed_at = datetime.now(timezone.utc)
+                            version.status = "FAILED"
+                            document.status = "FAILED"
+                            await session.commit()
+                            logger.error(
+                                f"OCR task queue failed | job_id={job.id} | "
+                                f"error={type(queue_error).__name__}: {queue_error}"
+                            )
+                    return
                 if quality_report["empty"]:
                     raise ValueError("Document contains no readable text")
-                await finish_stage(session, quality_check, quality_report)
 
                 cleaning = await start_stage(session, job, "CLEANING", 40)
                 parsed["plain_text"] = parsed["plain_text"].replace("\r\n", "\n").replace("\r", "\n").strip()
@@ -276,9 +363,14 @@ async def process_ingestion_job(job_id: uuid.UUID) -> None:
             await embed_and_index_chunks(session, job, document, version)
         except IngestionCancelled:
             await session.rollback()
+            logger.info(f"Ingestion cancelled | job_id={job_id}")
             return
         except Exception as error:
             await session.rollback()
+            logger.exception(
+                f"Ingestion job failed | job_id={job_id} | "
+                f"error={type(error).__name__}: {error}"
+            )
             job = await session.get(IngestionJob, job_id)
             if job is not None:
                 if job.status == "CANCELLED":

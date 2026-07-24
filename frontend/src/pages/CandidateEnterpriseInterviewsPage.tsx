@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { MessageOutlined, PlayCircleOutlined, ReloadOutlined } from '@ant-design/icons'
-import { Button, Empty, Space, Table, Tag, Tooltip, Typography, message } from 'antd'
+import { Button, Empty, Progress, Space, Table, Tag, Tooltip, Typography, message } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import { getCandidateApplications } from '../api/recruitment'
 import AppHeader from '../components/AppHeader'
@@ -31,22 +31,31 @@ function CandidateEnterpriseInterviewsPage() {
   const [items, setItems] = useState<JobApplication[]>([])
   const [loading, setLoading] = useState(true)
 
-  const loadData = async () => {
-    setLoading(true)
+  const loadData = async (showLoading = true) => {
+    if (showLoading) setLoading(true)
     try {
       const applications = await getCandidateApplications()
       setItems(applications.filter((item) => (
         item.interview_session_id !== null
-        && ['INTERVIEW', 'HIRED'].includes(item.status)
+        && ['INTERVIEW', 'HIRED', 'REJECTED'].includes(item.status)
       )))
     } catch (error) {
       message.error(getApiErrorMessage(error, '企业面试加载失败'))
     } finally {
-      setLoading(false)
+      if (showLoading) setLoading(false)
     }
   }
 
   useEffect(() => { void loadData() }, [])
+  const hasPendingResult = items.some((item) => (
+    ['DRAFT', 'PLANNING', 'READY', 'IN_PROGRESS'].includes(item.interview_status ?? '')
+    || (item.interview_status === 'COMPLETED' && item.status === 'INTERVIEW')
+  ))
+  useEffect(() => {
+    if (!hasPendingResult) return
+    const timer = window.setInterval(() => { void loadData(false) }, 5000)
+    return () => window.clearInterval(timer)
+  }, [hasPendingResult])
 
   return (
     <main className="dashboard-page">
@@ -83,6 +92,22 @@ function CandidateEnterpriseInterviewsPage() {
                     render: (value: string | null) => value
                       ? <Tag color={interviewStatusColor[value]}>{interviewStatusLabel[value] ?? value}</Tag>
                       : '-',
+                  },
+                  {
+                    title: '进度/结果',
+                    key: 'result',
+                    width: 160,
+                    render: (_: unknown, item: JobApplication) => {
+                      if (item.status === 'HIRED') return <Tag color="green">已通过</Tag>
+                      if (item.status === 'REJECTED') return <Tag color="red">未通过</Tag>
+                      if (item.interview_status === 'COMPLETED') return <Tag color="gold">结果待公布</Tag>
+                      if (item.interview_status === 'IN_PROGRESS') {
+                        const completed = item.interview_current_question_order ?? 0
+                        const maximum = item.interview_max_question_count ?? 10
+                        return <Progress percent={Math.min(100, Math.round((completed / maximum) * 100))} size="small" />
+                      }
+                      return '-'
+                    },
                   },
                   { title: '邀请时间', dataIndex: 'updated_at', key: 'updated', render: (value: string) => new Date(value).toLocaleString('zh-CN') },
                   {

@@ -1,0 +1,16 @@
+{
+  "cases": [
+    {
+      "case_id": "native-resume-001",
+      "pdf": "fixtures/native-resume-001.pdf",
+      "expected_text": "expected/native-resume-001.txt",
+      "page_kinds": ["TEXT", "TEXT"]
+    },
+    {
+      "case_id": "scanned-resume-001",
+      "pdf": "fixtures/scanned-resume-001.pdf",
+      "expected_text": "expected/scanned-resume-001.txt",
+      "page_kinds": ["SCANNED", "SCANNED"]
+    }
+  ]
+}

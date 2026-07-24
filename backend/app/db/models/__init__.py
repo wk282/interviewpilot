@@ -6,8 +6,11 @@ from app.db.models.interview import (
     InterviewAnswer,
     InterviewEvaluation,
     InterviewPlan,
+    InterviewPlanRevision,
+    InterviewQualityAudit,
     InterviewQuestion,
     InterviewSession,
+    InterviewTurnCritique,
     JobPosition,
 )
 from app.db.models.interview_invitation import InterviewInvitation
@@ -35,8 +38,11 @@ __all__ = [
     "InterviewAnswer",
     "InterviewEvaluation",
     "InterviewPlan",
+    "InterviewPlanRevision",
+    "InterviewQualityAudit",
     "InterviewQuestion",
     "InterviewSession",
+    "InterviewTurnCritique",
     "InterviewInvitation",
     "InterviewDecision",
     "JobPosition",

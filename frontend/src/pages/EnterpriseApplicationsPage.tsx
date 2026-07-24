@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { CheckOutlined, DownloadOutlined, EyeOutlined, FileAddOutlined, FileDoneOutlined, MailOutlined, MessageOutlined, StopOutlined } from '@ant-design/icons'
-import { Button, Descriptions, Drawer, Form, InputNumber, Modal, Select, Space, Table, Tag, Tooltip, Typography, message } from 'antd'
+import { CheckOutlined, DownloadOutlined, EyeOutlined, FileAddOutlined, FileDoneOutlined, MailOutlined, MessageOutlined, SearchOutlined, StopOutlined } from '@ant-design/icons'
+import { Button, Descriptions, Drawer, Form, Input, InputNumber, Modal, Select, Space, Table, Tag, Tooltip, Typography, message } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import {
   createApplicationInterview,
@@ -9,9 +9,11 @@ import {
   sendPlatformInterviewInvitation,
   updateJobApplicationStatus,
 } from '../api/recruitment'
+import { getKnowledgeBases } from '../api/knowledgeBases'
 import AppHeader from '../components/AppHeader'
 import EnterpriseSidebar from '../components/EnterpriseSidebar'
 import type { ApplicationInterviewCreateRequest, JobApplication } from '../types/recruitment'
+import type { KnowledgeBase, KnowledgeBasePurpose } from '../types/knowledgeBase'
 import { getApiErrorMessage } from '../utils/apiError'
 import { getActiveWorkspace } from '../utils/workspaceStorage'
 
@@ -33,22 +35,37 @@ const statusColor: Record<string, string> = {
   HIRED: 'green',
 }
 
+const knowledgeBasePurposeLabels: Record<KnowledgeBasePurpose, string> = {
+  RESUME: '简历',
+  PERSONAL_LEARNING: '个人学习资料',
+  ENTERPRISE_QUESTION_BANK: '企业题库',
+  JOB_SPECIFIC: '岗位专项',
+  SCORING_RUBRIC: '评分标准',
+  TECHNICAL_STANDARD: '技术规范',
+}
+
 function EnterpriseApplicationsPage() {
   const workspace = getActiveWorkspace()
   const navigate = useNavigate()
   const [form] = Form.useForm<ApplicationInterviewCreateRequest>()
   const [applications, setApplications] = useState<JobApplication[]>([])
+  const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([])
   const [selected, setSelected] = useState<JobApplication | null>(null)
   const [detailApplication, setDetailApplication] = useState<JobApplication | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
 
   const loadData = async (showLoading = true) => {
     if (!workspace) return
     if (showLoading) setLoading(true)
     try {
-      const items = await getEnterpriseApplications(workspace.id)
+      const [items, knowledgeBaseItems] = await Promise.all([
+        getEnterpriseApplications(workspace.id),
+        getKnowledgeBases(workspace.id),
+      ])
       setApplications(items)
+      setKnowledgeBases(knowledgeBaseItems)
       setDetailApplication((current) => (
         current ? items.find((item) => item.id === current.id) ?? null : null
       ))
@@ -115,6 +132,14 @@ function EnterpriseApplicationsPage() {
     }
   }
 
+  const referenceKnowledgeBases = knowledgeBases.filter((item) => item.purpose !== 'RESUME')
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase()
+  const filteredApplications = applications.filter((item) => (
+    !normalizedSearchQuery
+    || [item.candidate_name, item.candidate_email, item.job_title, item.status, statusLabel[item.status], item.interview_status]
+      .some((value) => value?.toLowerCase().includes(normalizedSearchQuery))
+  ))
+
   const sendInvitation = async (item: JobApplication) => {
     if (!workspace || !item.interview_session_id) return
     try {
@@ -156,10 +181,13 @@ function EnterpriseApplicationsPage() {
           </div>
 
           <section className="content-panel management-panel">
+            <div className="list-toolbar">
+              <Input allowClear prefix={<SearchOutlined />} value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="搜索候选人、邮箱或岗位" className="list-search" />
+            </div>
             <Table<JobApplication>
               rowKey="id"
               loading={loading}
-              dataSource={applications}
+              dataSource={filteredApplications}
               pagination={{ pageSize: 12 }}
               scroll={{ x: 920 }}
               columns={[
@@ -287,6 +315,18 @@ function EnterpriseApplicationsPage() {
 
       <Modal title={selected ? `为 ${selected.candidate_name} 创建面试` : '创建面试'} open={selected !== null} onCancel={() => { setSelected(null); form.resetFields() }} footer={null} destroyOnHidden>
         <Form<ApplicationInterviewCreateRequest> form={form} layout="vertical" onFinish={createInterview} initialValues={{ max_question_count: 10, question_time_limit_minutes: 10 }} requiredMark={false}>
+          <Form.Item
+            label="面试参考知识库"
+            name="reference_knowledge_base_ids"
+            rules={[{ type: 'array', max: 5, message: '最多选择 5 个知识库' }]}
+          >
+            <Select
+              mode="multiple"
+              maxTagCount="responsive"
+              placeholder={referenceKnowledgeBases.length > 0 ? '选择参考知识库（可选）' : '暂无可用的非简历知识库'}
+              options={referenceKnowledgeBases.map((item) => ({ value: item.id, label: `${item.name} · ${knowledgeBasePurposeLabels[item.purpose]}` }))}
+            />
+          </Form.Item>
           <Form.Item label="最大问题数" name="max_question_count" rules={[{ required: true }]}><InputNumber min={3} max={20} precision={0} className="full-width-control" /></Form.Item>
           <Form.Item label="每题作答时间" name="question_time_limit_minutes" rules={[{ required: true }]}>
             <Select options={[
