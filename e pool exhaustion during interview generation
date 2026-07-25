@@ -1,0 +1,141 @@
+[1mdiff --git a/backend/.env.example b/backend/.env.example[m
+[1mindex bf81102..ce343e3 100644[m
+[1m--- a/backend/.env.example[m
+[1m+++ b/backend/.env.example[m
+[36m@@ -17,6 +17,10 @@[m [mRERANK_MODEL_NAME=rerank[m
+ [m
+ DATABASE_URL=postgresql+asyncpg://interviewpilot:replace-me@localhost:5432/interviewpilot[m
+ DATABASE_ECHO=false[m
+[32m+[m[32mDATABASE_POOL_SIZE=10[m
+[32m+[m[32mDATABASE_MAX_OVERFLOW=20[m
+[32m+[m[32mDATABASE_POOL_TIMEOUT_SECONDS=15[m
+[32m+[m[32mDATABASE_POOL_RECYCLE_SECONDS=1800[m
+ LANGGRAPH_CHECKPOINT_DATABASE_URL=postgresql://interviewpilot:replace-me@localhost:5432/interviewpilot[m
+ INTERVIEW_PLAN_TIMEOUT_SECONDS=180[m
+ INTERVIEW_PLAN_STALE_SECONDS=600[m
+[1mdiff --git a/backend/app/core/config.py b/backend/app/core/config.py[m
+[1mindex 1256307..0a95b8f 100644[m
+[1m--- a/backend/app/core/config.py[m
+[1m+++ b/backend/app/core/config.py[m
+[36m@@ -14,6 +14,10 @@[m [mclass Settings(BaseSettings):[m
+     # PostgreSQL and authentication configuration[m
+     DATABASE_URL: str = "postgresql+asyncpg://interviewpilot:your_password@localhost:5432/interviewpilot"[m
+     DATABASE_ECHO: bool = False[m
+[32m+[m[32m    DATABASE_POOL_SIZE: int = Field(default=10, ge=1, le=50)[m
+[32m+[m[32m    DATABASE_MAX_OVERFLOW: int = Field(default=20, ge=0, le=100)[m
+[32m+[m[32m    DATABASE_POOL_TIMEOUT_SECONDS: float = Field(default=15.0, gt=0, le=120)[m
+[32m+[m[32m    DATABASE_POOL_RECYCLE_SECONDS: int = Field(default=1800, ge=60, le=86400)[m
+     LANGGRAPH_CHECKPOINT_DATABASE_URL: str | None = None[m
+     INTERVIEW_PLAN_TIMEOUT_SECONDS: int = 180[m
+     INTERVIEW_PLAN_STALE_SECONDS: int = 600[m
+[1mdiff --git a/backend/app/db/session.py b/backend/app/db/session.py[m
+[1mindex 3c305b2..2e413de 100644[m
+[1m--- a/backend/app/db/session.py[m
+[1m+++ b/backend/app/db/session.py[m
+[36m@@ -8,6 +8,11 @@[m [mfrom app.core.config import settings[m
+ engine = create_async_engine([m
+     settings.DATABASE_URL,[m
+     pool_pre_ping=True,[m
+[32m+[m[32m    pool_size=settings.DATABASE_POOL_SIZE,[m
+[32m+[m[32m    max_overflow=settings.DATABASE_MAX_OVERFLOW,[m
+[32m+[m[32m    pool_timeout=settings.DATABASE_POOL_TIMEOUT_SECONDS,[m
+[32m+[m[32m    pool_recycle=settings.DATABASE_POOL_RECYCLE_SECONDS,[m
+[32m+[m[32m    pool_use_lifo=True,[m
+     echo=settings.DATABASE_ECHO,[m
+ )[m
+ [m
+[1mdiff --git a/backend/app/services/crag_workflow.py b/backend/app/services/crag_workflow.py[m
+[1mindex 3310303..4885ced 100644[m
+[1m--- a/backend/app/services/crag_workflow.py[m
+[1m+++ b/backend/app/services/crag_workflow.py[m
+[36m@@ -160,6 +160,9 @@[m [mclass CRAGWorkflow:[m
+                 retrieval_query=state["query"],[m
+                 observability=retrieval_observability,[m
+             )[m
+[32m+[m[32m            # Retrieval only reads local evidence. End that transaction before[m
+[32m+[m[32m            # the Grader, Query Rewrite or Web Search waits on external APIs.[m
+[32m+[m[32m            await self.session.commit()[m
+         local_evidence = [{**item, "source_type": "LOCAL"} for item in evidence][m
+         trace = [[m
+             *state["trace"],[m
+[1mdiff --git a/backend/app/services/interview_conductor.py b/backend/app/services/interview_conductor.py[m
+[1mindex 90bfb1c..eb5affe 100644[m
+[1m--- a/backend/app/services/interview_conductor.py[m
+[1m+++ b/backend/app/services/interview_conductor.py[m
+[36m@@ -293,6 +293,11 @@[m [masync def generate_next_turn([m
+         target_competency=guidance.target_competency if guidance else None,[m
+         knowledge_gaps=guidance.knowledge_gaps if guidance else None,[m
+     )[m
+[32m+[m[32m    # Critic/Reviser writes and the context reads above must not keep a pooled[m
+[32m+[m[32m    # database connection checked out while CRAG and the Interviewer wait on[m
+[32m+[m[32m    # embedding/LLM services. expire_on_commit=False keeps the loaded values[m
+[32m+[m[32m    # usable after this deliberate transaction boundary.[m
+[32m+[m[32m    await session.commit()[m
+     crag_started_at = perf_counter()[m
+     crag_result = await run_crag_retrieval([m
+         session,[m
+[1mdiff --git a/backend/app/services/interview_planner.py b/backend/app/services/interview_planner.py[m
+[1mindex 1726ff2..ecce53b 100644[m
+[1m--- a/backend/app/services/interview_planner.py[m
+[1m+++ b/backend/app/services/interview_planner.py[m
+[36m@@ -138,6 +138,11 @@[m [masync def collect_evidence([m
+     if not unique_retrieval_sources:[m
+         return [][m
+ [m
+[32m+[m[32m    # Access validation above opens an SQLAlchemy transaction. Release its[m
+[32m+[m[32m    # connection before waiting on the external embedding API so concurrent[m
+[32m+[m[32m    # interview requests do not exhaust the application connection pool.[m
+[32m+[m[32m    await session.commit()[m
+[32m+[m
+     embedding_started_at = perf_counter()[m
+     try:[m
+         query_embedding = await create_query_embedding(retrieval_query)[m
+[1mdiff --git a/backend/run_server.py b/backend/run_server.py[m
+[1mindex c97c3d3..7a99d94 100644[m
+[1m--- a/backend/run_server.py[m
+[1m+++ b/backend/run_server.py[m
+[36m@@ -6,11 +6,14 @@[m [mexcept ImportError:[m
+     pass[m
+ [m
+ import uvicorn[m
+[31m-from fastapi import FastAPI[m
+[32m+[m[32mfrom fastapi import Depends, FastAPI[m
+ from fastapi.middleware.cors import CORSMiddleware[m
+[32m+[m[32mfrom sqlalchemy import text[m
+[32m+[m[32mfrom sqlalchemy.ext.asyncio import AsyncSession[m
+ from app.api.routes import router[m
+ from app.api.v1.router import router as v1_router[m
+ from app.core.config import settings[m
+[32m+[m[32mfrom app.db.session import get_db_session[m
+ from app.core.event_loop import configure_windows_selector_event_loop[m
+ [m
+ [m
+[36m@@ -54,9 +57,12 @@[m [mdef health_check():[m
+ [m
+ [m
+ @app.get("/api/v1/health", tags=["health"])[m
+[31m-def api_health_check():[m
+[31m-    """供反向代理和生产部署使用的版本化健康检查接口。"""[m
+[31m-    return {"status": "ok"}[m
+[32m+[m[32masync def api_health_check([m
+[32m+[m[32m    session: AsyncSession = Depends(get_db_session),[m
+[32m+[m[32m):[m
+[32m+[m[32m    """验证API进程和核心数据库连接均可用。"""[m
+[32m+[m[32m    await session.execute(text("SELECT 1"))[m
+[32m+[m[32m    return {"status": "ok", "database": "ok"}[m
+ [m
+ if __name__ == "__main__":[m
+     # 使用 Uvicorn 作为 ASGI 服务器启动 FastAPI[m
+[1mdiff --git a/docker-compose.yml b/docker-compose.yml[m
+[1mindex 8efe424..73cd046 100644[m
+[1m--- a/docker-compose.yml[m
+[1m+++ b/docker-compose.yml[m
+[36m@@ -107,7 +107,7 @@[m [mservices:[m
+         - CMD[m
+         - python[m
+         - -c[m
+[31m-        - import urllib.request; urllib.request.urlopen('http://localhost:8000/', timeout=5)[m
+[32m+[m[32m        - import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health', timeout=4)[m
+       interval: 10s[m
+       timeout: 5s[m
+       retries: 12[m
