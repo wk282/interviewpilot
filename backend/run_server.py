@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import router
 from app.api.v1.router import router as v1_router
+from app.core.config import settings
 from app.core.event_loop import configure_windows_selector_event_loop
 
 
@@ -25,7 +26,11 @@ app = FastAPI(
 # 2. 配置跨域白名单
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=[
+        origin.strip()
+        for origin in settings.CORS_ALLOWED_ORIGINS.split(",")
+        if origin.strip()
+    ],
     allow_credentials=True,
     allow_methods=["*"],  # 允许 GET, POST, OPTIONS 等所有方法
     allow_headers=["*"],

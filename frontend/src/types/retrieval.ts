@@ -7,6 +7,10 @@ export type RetrievalProfile =
   | 'VECTOR_BM25_RERANK'
   | 'VECTOR_TRIGRAM_BM25'
   | 'VECTOR_TRIGRAM_BM25_RERANK'
+  | 'VECTOR_BM25_RRF'
+  | 'VECTOR_BM25_RRF_RERANK'
+  | 'VECTOR_TRIGRAM_BM25_RRF'
+  | 'VECTOR_TRIGRAM_BM25_RRF_RERANK'
 
 export interface RetrievalResult {
   chunk_id: string
@@ -19,8 +23,11 @@ export interface RetrievalResult {
   fusion_score: number
   fusion_rank: number
   vector_similarity: number | null
+  vector_rank: number | null
   trigram_similarity: number | null
+  trigram_rank: number | null
   bm25_score: number | null
+  bm25_rank: number | null
   rerank_score: number | null
   rerank_rank: number | null
   retrieval_sources: Array<'VECTOR' | 'TRIGRAM' | 'BM25'>

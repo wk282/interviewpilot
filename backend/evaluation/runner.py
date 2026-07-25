@@ -399,6 +399,7 @@ async def retrieve_crag(
         None,
         retrieval_provider=provider,
         web_enabled_override=web_enabled,
+        retrieval_profile=profile,
     )
     result = await workflow.run(query)
     local_evidence = [item for item in result.evidence if item.get("source_type") != "WEB"]

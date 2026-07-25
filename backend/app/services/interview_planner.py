@@ -205,6 +205,13 @@ async def collect_evidence(
                     "filename": result.filename,
                     "content": result.context,
                     "fusion_score": result.fusion_score,
+                    "fusion_rank": result.fusion_rank,
+                    "vector_similarity": result.vector_similarity,
+                    "vector_rank": result.vector_rank,
+                    "bm25_score": result.bm25_score,
+                    "bm25_rank": result.bm25_rank,
+                    "retrieval_sources": result.retrieval_sources,
+                    "retrieval_profile": response.retrieval_profile,
                 }
             )
     if observability is not None:

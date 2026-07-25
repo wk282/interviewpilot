@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     JWT_SECRET_KEY: str = "change-me-in-env"
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    CORS_ALLOWED_ORIGINS: str = (
+        "http://localhost:5173,http://127.0.0.1:5173,"
+        "http://localhost:8080,http://127.0.0.1:8080"
+    )
     DOCUMENT_STORAGE_ROOT: str = "data/uploads"
     DOCUMENT_MAX_FILE_SIZE_MB: int = 25
     OCR_WORKER_ENABLED: bool = False
@@ -54,6 +58,11 @@ class Settings(BaseSettings):
     CRAG_LOCAL_FAST_PATH_ENABLED: bool = True
     CRAG_FAST_PATH_MIN_EVIDENCE: int = 2
     CRAG_FAST_PATH_MIN_FUSION_SCORE: float = 0.55
+    CRAG_RRF_FAST_PATH_MIN_VECTOR_SIMILARITY: float = Field(
+        default=0.60, ge=0.0, le=1.0
+    )
+    CRAG_RRF_FAST_PATH_MAX_VECTOR_RANK: int = Field(default=5, ge=1, le=100)
+    CRAG_RRF_FAST_PATH_MAX_BM25_RANK: int = Field(default=5, ge=1, le=100)
 
     # Interview retrieval defaults are selected from the frozen offline benchmark.
     INTERVIEW_RETRIEVAL_PROFILE: Literal[

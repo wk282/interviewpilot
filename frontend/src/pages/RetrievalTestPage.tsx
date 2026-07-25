@@ -19,6 +19,10 @@ const profileLabels: Record<RetrievalProfile, string> = {
   VECTOR_BM25_RERANK: '向量 + BM25 + Reranker',
   VECTOR_TRIGRAM_BM25: '向量 + Trigram + BM25',
   VECTOR_TRIGRAM_BM25_RERANK: '向量 + Trigram + BM25 + Reranker',
+  VECTOR_BM25_RRF: '向量 + BM25 + RRF',
+  VECTOR_BM25_RRF_RERANK: '向量 + BM25 + RRF + Reranker',
+  VECTOR_TRIGRAM_BM25_RRF: '向量 + Trigram + BM25 + RRF',
+  VECTOR_TRIGRAM_BM25_RRF_RERANK: '向量 + Trigram + BM25 + RRF + Reranker',
 }
 
 function RetrievalTestPage() {
@@ -29,7 +33,7 @@ function RetrievalTestPage() {
   const canManage = personal || workspace?.role === 'OWNER' || workspace?.role === 'ADMIN'
   const [query, setQuery] = useState('')
   const [topK, setTopK] = useState(5)
-  const [profile, setProfile] = useState<RetrievalProfile>('VECTOR_TRIGRAM_BM25_RERANK')
+  const [profile, setProfile] = useState<RetrievalProfile>('VECTOR_BM25_RRF')
   const [searching, setSearching] = useState(false)
   const [reindexing, setReindexing] = useState(false)
   const [response, setResponse] = useState<RetrievalResponse | null>(null)
@@ -133,10 +137,14 @@ function RetrievalTestPage() {
                       <Typography.Text strong>{item.filename}</Typography.Text>
                     </Space>
                     <Space wrap>
-                      <Tag>融合 #{item.fusion_rank} · {(item.fusion_score * 100).toFixed(1)}%</Tag>
-                      {item.vector_similarity !== null && <Tag color="blue">向量 {(item.vector_similarity * 100).toFixed(1)}%</Tag>}
-                      {item.trigram_similarity !== null && <Tag color="green">Trigram {(item.trigram_similarity * 100).toFixed(1)}%</Tag>}
-                      {item.bm25_score !== null && <Tag color="cyan">BM25 {item.bm25_score.toFixed(3)}</Tag>}
+                      <Tag>
+                        融合 #{item.fusion_rank} · {response.retrieval_profile.includes('_RRF')
+                          ? `RRF ${item.fusion_score.toFixed(6)}`
+                          : `${(item.fusion_score * 100).toFixed(1)}%`}
+                      </Tag>
+                      {item.vector_similarity !== null && <Tag color="blue">向量 #{item.vector_rank ?? '-'} · {(item.vector_similarity * 100).toFixed(1)}%</Tag>}
+                      {item.trigram_similarity !== null && <Tag color="green">Trigram #{item.trigram_rank ?? '-'} · {(item.trigram_similarity * 100).toFixed(1)}%</Tag>}
+                      {item.bm25_score !== null && <Tag color="cyan">BM25 #{item.bm25_rank ?? '-'} · {item.bm25_score.toFixed(3)}</Tag>}
                       {item.rerank_score !== null && <Tag color="purple">重排 #{item.rerank_rank} · {item.rerank_score.toFixed(6)}</Tag>}
                     </Space>
                   </div>

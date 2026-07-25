@@ -167,7 +167,7 @@ function TraceNode({ node }: { node: TraceRecord }) {
         {usage > 0 && <Tag>{usage} Tokens</Tag>}
         {model && <Tag>{model}</Tag>}
         {promptVersion && <Tag>{promptVersion}</Tag>}
-        {node.error && <Tag color="red" icon={<WarningOutlined />}>执行异常</Tag>}
+        {Boolean(node.error) && <Tag color="red" icon={<WarningOutlined />}>执行异常</Tag>}
       </Space>
       {role && <Typography.Paragraph className="agent-trace-copy" type="secondary">职责：{role}</Typography.Paragraph>}
       {tools.length > 0 && (

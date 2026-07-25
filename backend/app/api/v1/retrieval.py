@@ -79,6 +79,22 @@ class CandidateScore:
     bm25_score: float | None = None
 
 
+def reciprocal_rank_fusion(
+    candidate_ids: list[uuid.UUID],
+    channel_ranks: dict[str, dict[uuid.UUID, int]],
+    *,
+    k: int = 60,
+) -> dict[uuid.UUID, float]:
+    return {
+        chunk_id: sum(
+            1.0 / (k + ranks[chunk_id])
+            for ranks in channel_ranks.values()
+            if chunk_id in ranks
+        )
+        for chunk_id in candidate_ids
+    }
+
+
 async def require_accessible_knowledge_base(
     session: AsyncSession,
     workspace_id: uuid.UUID,
@@ -375,20 +391,44 @@ async def retrieve_knowledge_base(
         normalized_scores["BM25"] = normalize_scores(bm25_scores, valid_ids)
         active_channels.append("BM25")
 
-    # 【判定融合策略】：若 Profile 显式指定 RRF 则走 RRF 排名倒数求和，否则走 Min-Max 加权求和
+    # Preserve each channel's original recall rank. Candidates absent from a
+    # channel must not receive an RRF contribution from that channel.
+    channel_ranks: dict[str, dict[uuid.UUID, int]] = {
+        "VECTOR": {
+            chunk_id: rank
+            for rank, (chunk_id, _) in enumerate(
+                (row for row in vector_rows if row[0] in details_by_id),
+                start=1,
+            )
+        }
+    }
+    if "TRIGRAM" in active_channels:
+        channel_ranks["TRIGRAM"] = {
+            chunk_id: rank
+            for rank, (chunk_id, _) in enumerate(
+                (
+                    row
+                    for row in trigram_rows
+                    if row[0] in details_by_id
+                    and trigram_similarity_from_distance(float(row[1])) > 0.0
+                ),
+                start=1,
+            )
+        }
+    if "BM25" in active_channels:
+        channel_ranks["BM25"] = {
+            chunk_id: rank
+            for rank, (chunk_id, _) in enumerate(
+                (row for row in bm25_rows if row[0] in details_by_id),
+                start=1,
+            )
+        }
+
+    # RRF uses ranks; non-RRF profiles use Min-Max normalized weighted scores.
     is_rrf = request.profile in RRF_PROFILES
     if is_rrf:
         k_rrf = 60
-        channel_ranks: dict[str, dict[uuid.UUID, int]] = {}
-        if "VECTOR" in active_channels:
-            v_order = sorted(valid_ids, key=lambda cid: vector_scores.get(cid, 0.0), reverse=True)
-            channel_ranks["VECTOR"] = {cid: rank for rank, cid in enumerate(v_order, start=1)}
-        if "TRIGRAM" in active_channels:
-            t_order = sorted(valid_ids, key=lambda cid: trigram_scores.get(cid, 0.0), reverse=True)
-            channel_ranks["TRIGRAM"] = {cid: rank for rank, cid in enumerate(t_order, start=1)}
-        if "BM25" in active_channels:
-            b_order = sorted(valid_ids, key=lambda cid: bm25_scores.get(cid, 0.0), reverse=True)
-            channel_ranks["BM25"] = {cid: rank for rank, cid in enumerate(b_order, start=1)}
+        rrf_scores = reciprocal_rank_fusion(valid_ids, channel_ranks, k=k_rrf)
     else:
         total_weight = sum(FUSION_WEIGHTS[channel] for channel in active_channels)
 
@@ -408,11 +448,8 @@ async def retrieve_knowledge_base(
             ),
         )
         if is_rrf:
-            # RRF 融合得分: RRF_score = sum(1.0 / (60 + rank))
-            candidate.fusion_score = sum(
-                1.0 / (k_rrf + channel_ranks[channel][chunk_id])
-                for channel in active_channels
-            )
+            # RRF is a relative ranking score, not a relevance probability.
+            candidate.fusion_score = rrf_scores[chunk_id]
         else:
             # 加权归一化得分: sum(weight * norm_score)
             candidate.fusion_score = sum(
@@ -511,16 +548,19 @@ async def retrieve_knowledge_base(
                     if candidate.vector_similarity is not None
                     else None
                 ),
+                vector_rank=channel_ranks.get("VECTOR", {}).get(chunk_id),
                 trigram_similarity=(
                     round(candidate.trigram_similarity, 6)
                     if candidate.trigram_similarity is not None
                     else None
                 ),
+                trigram_rank=channel_ranks.get("TRIGRAM", {}).get(chunk_id),
                 bm25_score=(
                     round(candidate.bm25_score, 6)
                     if candidate.bm25_score is not None
                     else None
                 ),
+                bm25_rank=channel_ranks.get("BM25", {}).get(chunk_id),
                 rerank_score=(
                     round(rerank_scores.get(chunk_id, 0.0), 6)
                     if request.profile in RERANK_PROFILES
@@ -532,7 +572,9 @@ async def retrieve_knowledge_base(
                     else None
                 ),
                 retrieval_sources=[
-                    source for source in active_channels
+                    source
+                    for source in active_channels
+                    if chunk_id in channel_ranks.get(source, {})
                 ],
                 chunk_index=chunk.chunk_index,
                 metadata=chunk.chunk_metadata or {},

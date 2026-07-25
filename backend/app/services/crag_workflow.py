@@ -115,6 +115,7 @@ class CRAGWorkflow:
         *,
         retrieval_provider: Callable[[str], Awaitable[list[dict]]] | None = None,
         web_enabled_override: bool | None = None,
+        retrieval_profile: str | None = None,
     ) -> None:
         self.session = session
         self.interview = interview
@@ -122,6 +123,7 @@ class CRAGWorkflow:
         self.candidate = candidate
         self.user = user
         self.retrieval_provider = retrieval_provider
+        self.retrieval_profile = retrieval_profile or settings.INTERVIEW_RETRIEVAL_PROFILE
         self.max_rewrites = settings.CRAG_MAX_REWRITES
         self.max_web_searches = settings.CRAG_MAX_WEB_SEARCHES
         configured_web_enabled = settings.CRAG_WEB_SEARCH_ENABLED and bool(
@@ -172,12 +174,79 @@ class CRAGWorkflow:
         ]
         return {"evidence": local_evidence, "trace": trace}
 
+    @property
+    def uses_rrf(self) -> bool:
+        return "_RRF" in self.retrieval_profile
+
+    def local_fast_path_grade(
+        self, evidence: list[dict]
+    ) -> tuple[RetrievalGrade, str, dict[str, Any]] | None:
+        if (
+            not settings.CRAG_LOCAL_FAST_PATH_ENABLED
+            or len(evidence) < settings.CRAG_FAST_PATH_MIN_EVIDENCE
+        ):
+            return None
+
+        if not self.uses_rrf:
+            best_score = max(
+                (float(item.get("fusion_score") or 0.0) for item in evidence),
+                default=0.0,
+            )
+            if best_score < settings.CRAG_FAST_PATH_MIN_FUSION_SCORE:
+                return None
+            return (
+                RetrievalGrade(
+                    status="sufficient",
+                    confidence=min(0.9, max(0.55, best_score)),
+                    missing_aspects=[],
+                    recommended_action="generate",
+                ),
+                "normalized_fusion_score",
+                {"best_fusion_score": best_score},
+            )
+
+        # Raw RRF scores are only relative ranks. For the deterministic fast
+        # path, require an absolute vector signal and agreement between the
+        # original vector and BM25 recall lists.
+        top = evidence[0]
+        vector_similarity = float(top.get("vector_similarity") or 0.0)
+        vector_rank = int(top.get("vector_rank") or 10**9)
+        bm25_rank = int(top.get("bm25_rank") or 10**9)
+        retrieval_sources = set(top.get("retrieval_sources") or [])
+        signals = {
+            "vector_similarity": vector_similarity,
+            "vector_rank": vector_rank if vector_rank < 10**9 else None,
+            "bm25_rank": bm25_rank if bm25_rank < 10**9 else None,
+            "retrieval_sources": sorted(retrieval_sources),
+            "rrf_score": float(top.get("fusion_score") or 0.0),
+        }
+        if not (
+            {"VECTOR", "BM25"}.issubset(retrieval_sources)
+            and vector_similarity
+            >= settings.CRAG_RRF_FAST_PATH_MIN_VECTOR_SIMILARITY
+            and vector_rank <= settings.CRAG_RRF_FAST_PATH_MAX_VECTOR_RANK
+            and bm25_rank <= settings.CRAG_RRF_FAST_PATH_MAX_BM25_RANK
+        ):
+            return None
+        return (
+            RetrievalGrade(
+                status="sufficient",
+                confidence=min(0.9, max(0.6, vector_similarity)),
+                missing_aspects=[],
+                recommended_action="generate",
+            ),
+            "rrf_cross_channel_agreement",
+            signals,
+        )
+
     async def grade_retrieval(self, state: CRAGState) -> dict:
         started_at = perf_counter()
         evidence = state["evidence"]
         grader_error: str | None = None
         usage: dict[str, int] = {}
         grader_concurrency: dict = {}
+        fast_path_strategy: str | None = None
+        fast_path_signals: dict[str, Any] = {}
         if not evidence:
             grading_source = "empty_evidence_rule"
             grade = RetrievalGrade(
@@ -186,24 +255,9 @@ class CRAGWorkflow:
                 missing_aspects=["没有检索到可用的本地证据"],
                 recommended_action="rewrite_query",
             )
-        elif (
-            settings.CRAG_LOCAL_FAST_PATH_ENABLED
-            and len(evidence) >= settings.CRAG_FAST_PATH_MIN_EVIDENCE
-            and max(
-                (float(item.get("fusion_score") or 0.0) for item in evidence),
-                default=0.0,
-            ) >= settings.CRAG_FAST_PATH_MIN_FUSION_SCORE
-        ):
+        elif fast_path := self.local_fast_path_grade(evidence):
             grading_source = "local_fast_path"
-            best_score = max(
-                float(item.get("fusion_score") or 0.0) for item in evidence
-            )
-            grade = RetrievalGrade(
-                status="sufficient",
-                confidence=min(0.9, max(0.55, best_score)),
-                missing_aspects=[],
-                recommended_action="generate",
-            )
+            grade, fast_path_strategy, fast_path_signals = fast_path
         else:
             payload = {
                 "query": state["query"],
@@ -267,6 +321,9 @@ class CRAGWorkflow:
                 "missing_aspects": grade.missing_aspects,
                 "recommended_action": grade.recommended_action,
                 "grading_source": grading_source,
+                "retrieval_profile": self.retrieval_profile,
+                "fast_path_strategy": fast_path_strategy,
+                "fast_path_signals": fast_path_signals,
                 "error": grader_error,
                 "prompt_version": CRAG_PROMPT_VERSION,
                 "model": settings.LLM_MINI_MODEL if grading_source == "model" else None,
@@ -282,11 +339,36 @@ class CRAGWorkflow:
         }
 
     def fallback_grade(self, evidence: list[dict]) -> RetrievalGrade:
+        if self.uses_rrf:
+            if len(evidence) >= 2:
+                return RetrievalGrade(
+                    status="partial",
+                    confidence=0.5,
+                    missing_aspects=["Grader 不可用，无法确认 RRF 证据的语义充分性"],
+                    recommended_action="generate",
+                )
+            if evidence:
+                return RetrievalGrade(
+                    status="partial",
+                    confidence=0.4,
+                    missing_aspects=["本地证据数量不足，且 Grader 不可用"],
+                    recommended_action=("web_search" if self.web_enabled else "generate"),
+                )
+            return RetrievalGrade(
+                status="irrelevant",
+                confidence=0.7,
+                missing_aspects=["没有检索到本地证据"],
+                recommended_action="rewrite_query",
+            )
+
         best_fusion_score = max(
             (float(item.get("fusion_score") or 0.0) for item in evidence),
             default=0.0,
         )
-        if len(evidence) >= 2 and best_fusion_score >= 0.55:
+        if (
+            len(evidence) >= settings.CRAG_FAST_PATH_MIN_EVIDENCE
+            and best_fusion_score >= settings.CRAG_FAST_PATH_MIN_FUSION_SCORE
+        ):
             return RetrievalGrade(
                 status="sufficient",
                 confidence=min(0.75, best_fusion_score),
@@ -308,7 +390,24 @@ class CRAGWorkflow:
         )
 
     def route_after_grade(self, state: CRAGState) -> str:
+        action = state["grade"].get("recommended_action")
         status = state["grade"].get("status")
+        if action == "generate":
+            return "generate"
+        if action == "rewrite_query":
+            if state["rewrite_count"] < self.max_rewrites:
+                return "rewrite_query"
+            if self.web_enabled and state["web_search_count"] < self.max_web_searches:
+                return "web_search"
+            return "generate"
+        if action == "web_search":
+            if self.web_enabled and state["web_search_count"] < self.max_web_searches:
+                return "web_search"
+            if status == "irrelevant" and state["rewrite_count"] < self.max_rewrites:
+                return "rewrite_query"
+            return "generate"
+
+        # Defensive compatibility for old checkpoints without recommended_action.
         if status == "sufficient":
             return "generate"
         if status == "partial":
@@ -317,8 +416,6 @@ class CRAGWorkflow:
             return "generate"
         if state["rewrite_count"] < self.max_rewrites:
             return "rewrite_query"
-        if self.web_enabled and state["web_search_count"] < self.max_web_searches:
-            return "web_search"
         return "generate"
 
     async def rewrite_query(self, state: CRAGState) -> dict:

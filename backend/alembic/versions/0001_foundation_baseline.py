@@ -1,4 +1,4 @@
-"""Mark the init.sql foundation schema as the Alembic baseline.
+"""Mark the Docker foundation schema as the Alembic baseline.
 
 Revision ID: 0001_foundation_baseline
 Revises:
@@ -11,7 +11,8 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # The eight foundation tables are created by init.sql in existing environments.
+    # Docker creates the eight foundation tables from docker/init.sql before
+    # Alembic applies the versioned incremental migrations.
     pass
 
 

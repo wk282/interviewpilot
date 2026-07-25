@@ -39,8 +39,11 @@ class RetrievalSearchResult(BaseModel):
     fusion_score: float
     fusion_rank: int
     vector_similarity: float | None
+    vector_rank: int | None = None
     trigram_similarity: float | None
+    trigram_rank: int | None = None
     bm25_score: float | None
+    bm25_rank: int | None = None
     rerank_score: float | None
     rerank_rank: int | None
     retrieval_sources: list[str]
@@ -54,21 +57,3 @@ class RetrievalSearchResponse(BaseModel):
     retrieval_profile: RetrievalProfile
     result_count: int
     results: list[RetrievalSearchResult]
-
-
-def compute_rrf_score(
-    candidate_ids: list[uuid.UUID],
-    vector_ranks: dict[uuid.UUID, int],
-    bm25_ranks: dict[uuid.UUID, int],
-    k: int = 60,
-) -> dict[uuid.UUID, float]:
-    """标准 RRF (Reciprocal Rank Fusion) 融合算法"""
-    rrf_scores = {}
-    for chunk_id in candidate_ids:
-        score = 0.0
-        if chunk_id in vector_ranks:
-            score += 1.0 / (k + vector_ranks[chunk_id])
-        if chunk_id in bm25_ranks:
-            score += 1.0 / (k + bm25_ranks[chunk_id])
-        rrf_scores[chunk_id] = score
-    return rrf_scores
