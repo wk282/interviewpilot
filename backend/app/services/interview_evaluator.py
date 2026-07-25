@@ -137,6 +137,7 @@ async def evaluate_interview(
     ]
     system_prompt = (
         "你是严格的技术面试评估官。只根据给定问答证据评分，不得补充候选人未表达的信息。"
+        "必须全程使用中文撰写评估内容（包括 strengths、weaknesses、finding、report_text 等所有文本字段）。"
         "评分维度只能使用 technical_depth、project_authenticity、problem_solving、system_design、communication。"
         "每条评价证据必须引用 transcript 中存在的 evidence_id。"
         "引用用于支持优点、缺点和分数，不能把题目的 expected_points 当成候选人已经回答的内容。"
