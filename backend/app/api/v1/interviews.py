@@ -1767,9 +1767,7 @@ async def delete_interview(
             )
             thread.updated_at = datetime.now(timezone.utc)
 
-    await session.execute(
-        sql_delete(InterviewSession).where(InterviewSession.id == interview.id)
-    )
+    await session.delete(interview)
     await session.commit()
     await delete_interview_checkpoints(interview.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

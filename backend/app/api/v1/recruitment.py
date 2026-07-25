@@ -1200,7 +1200,13 @@ async def candidate_interview_context(
         .where(
             InterviewSession.id == interview_id,
             JobApplication.candidate_user_id == user.id,
-            JobApplication.status.in_(("INTERVIEW", "HIRED", "REJECTED")),
+            or_(
+                JobApplication.status.in_(("INTERVIEW", "HIRED", "REJECTED")),
+                and_(
+                    JobApplication.status == "REVIEWING",
+                    InterviewSession.status.in_(("READY", "IN_PROGRESS", "COMPLETED")),
+                ),
+            ),
         )
     )
     if for_update:
