@@ -4,6 +4,7 @@ celery==5.6.3
 chromadb==1.5.9
 pysqlite3-binary==0.5.4
 cryptography==49.0.0
+email-validator==2.3.0
 fastapi==0.137.1
 httpx==0.28.1
 langchain-core==1.4.8
