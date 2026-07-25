@@ -107,7 +107,7 @@ services:
         - CMD
         - python
         - -c
-        - import urllib.request; urllib.request.urlopen('http://localhost:8000/', timeout=5)
+        - import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health', timeout=4)
       interval: 10s
       timeout: 5s
       retries: 12

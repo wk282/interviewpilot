@@ -160,6 +160,9 @@ class CRAGWorkflow:
                 retrieval_query=state["query"],
                 observability=retrieval_observability,
             )
+            # Retrieval only reads local evidence. End that transaction before
+            # the Grader, Query Rewrite or Web Search waits on external APIs.
+            await self.session.commit()
         local_evidence = [{**item, "source_type": "LOCAL"} for item in evidence]
         trace = [
             *state["trace"],

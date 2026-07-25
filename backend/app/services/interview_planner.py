@@ -138,6 +138,11 @@ async def collect_evidence(
     if not unique_retrieval_sources:
         return []
 
+    # Access validation above opens an SQLAlchemy transaction. Release its
+    # connection before waiting on the external embedding API so concurrent
+    # interview requests do not exhaust the application connection pool.
+    await session.commit()
+
     embedding_started_at = perf_counter()
     try:
         query_embedding = await create_query_embedding(retrieval_query)

@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     # PostgreSQL and authentication configuration
     DATABASE_URL: str = "postgresql+asyncpg://interviewpilot:your_password@localhost:5432/interviewpilot"
     DATABASE_ECHO: bool = False
+    DATABASE_POOL_SIZE: int = Field(default=10, ge=1, le=50)
+    DATABASE_MAX_OVERFLOW: int = Field(default=20, ge=0, le=100)
+    DATABASE_POOL_TIMEOUT_SECONDS: float = Field(default=15.0, gt=0, le=120)
+    DATABASE_POOL_RECYCLE_SECONDS: int = Field(default=1800, ge=60, le=86400)
     LANGGRAPH_CHECKPOINT_DATABASE_URL: str | None = None
     INTERVIEW_PLAN_TIMEOUT_SECONDS: int = 180
     INTERVIEW_PLAN_STALE_SECONDS: int = 600

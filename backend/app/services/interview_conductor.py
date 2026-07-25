@@ -293,6 +293,11 @@ async def generate_next_turn(
         target_competency=guidance.target_competency if guidance else None,
         knowledge_gaps=guidance.knowledge_gaps if guidance else None,
     )
+    # Critic/Reviser writes and the context reads above must not keep a pooled
+    # database connection checked out while CRAG and the Interviewer wait on
+    # embedding/LLM services. expire_on_commit=False keeps the loaded values
+    # usable after this deliberate transaction boundary.
+    await session.commit()
     crag_started_at = perf_counter()
     crag_result = await run_crag_retrieval(
         session,

@@ -6,11 +6,14 @@ except ImportError:
     pass
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.routes import router
 from app.api.v1.router import router as v1_router
 from app.core.config import settings
+from app.db.session import get_db_session
 from app.core.event_loop import configure_windows_selector_event_loop
 
 
@@ -54,9 +57,12 @@ def health_check():
 
 
 @app.get("/api/v1/health", tags=["health"])
-def api_health_check():
-    """供反向代理和生产部署使用的版本化健康检查接口。"""
-    return {"status": "ok"}
+async def api_health_check(
+    session: AsyncSession = Depends(get_db_session),
+):
+    """验证API进程和核心数据库连接均可用。"""
+    await session.execute(text("SELECT 1"))
+    return {"status": "ok", "database": "ok"}
 
 if __name__ == "__main__":
     # 使用 Uvicorn 作为 ASGI 服务器启动 FastAPI
