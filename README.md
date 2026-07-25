@@ -16,9 +16,11 @@ ResearchPilot/
 |  |- requirements.txt
 |  `- run_server.py
 |- frontend/                      React + TypeScript + Vite 前端应用
+|- deploy/                        Caddy 生产 HTTPS 网关配置
 |- docs/                          架构设计与 Baseline 文档
 |- 面试题/                         原始题库素材
-`- docker-compose.opensearch.yml  OpenSearch 开发环境依赖
+|- docker-compose.yml             完整应用容器编排
+`- docker-compose.opensearch.yml  OpenSearch 独立开发环境
 ```
 
 ## 后端运行 (Backend)
@@ -57,6 +59,22 @@ npm run dev
 ```
 
 Vite 开发服务器会自动将 `/api` 请求代理到后端地址 `http://127.0.0.1:8000`。
+
+## Docker Compose 部署
+
+本地完整容器栈使用：
+
+```powershell
+docker compose up -d --build
+```
+
+阿里云生产环境通过 `production` Profile 启动 Caddy，统一为 React 前端和 `/api/*` 后端接口提供域名与自动 HTTPS：
+
+```bash
+docker compose --profile production up -d --build
+```
+
+本地部署说明见 [docs/LOCAL_DOCKER_COMPOSE.md](docs/LOCAL_DOCKER_COMPOSE.md)，阿里云域名、DNS、安全组与 HTTPS 操作见 [docs/ALIYUN_DOMAIN_DEPLOYMENT.md](docs/ALIYUN_DOMAIN_DEPLOYMENT.md)。
 
 ## 基线版本 (Baseline)
 

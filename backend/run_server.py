@@ -52,6 +52,12 @@ def health_check():
     """健康检查接口：浏览器里访问根路径，看到这个就说明后端活蹦乱跳的。"""
     return {"status": "ok", "message": "ResearchPilot Backend is running smoothly! 🚀"}
 
+
+@app.get("/api/v1/health", tags=["health"])
+def api_health_check():
+    """供反向代理和生产部署使用的版本化健康检查接口。"""
+    return {"status": "ok"}
+
 if __name__ == "__main__":
     # 使用 Uvicorn 作为 ASGI 服务器启动 FastAPI
     # host="0.0.0.0" 表示允许局域网内其他设备访问
