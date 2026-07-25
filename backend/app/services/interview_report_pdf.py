@@ -67,26 +67,28 @@ def _display_width(character: str) -> int:
     return 2 if unicodedata.east_asian_width(character) in {"W", "F", "A"} else 1
 
 
-def _wrap_text(value: Any, max_width: int) -> list[str]:
+def _wrap_text_by_points(value: Any, font_size: float, max_width_pt: float) -> list[str]:
     text = str(value or "").replace("\r\n", "\n").replace("\r", "\n")
     if not text:
         return [""]
+    usable_width = max(20.0, float(max_width_pt) - 4.0)
     lines: list[str] = []
     for paragraph in text.split("\n"):
         if not paragraph:
             lines.append("")
             continue
         current: list[str] = []
-        width = 0
+        current_pt = 0.0
         for character in paragraph:
-            character_width = _display_width(character)
-            if current and width + character_width > max_width:
+            char_w = font_size if unicodedata.east_asian_width(character) in {"W", "F", "A"} else font_size * 0.58
+            if current and current_pt + char_w > usable_width:
                 lines.append("".join(current))
                 current = []
-                width = 0
+                current_pt = 0.0
             current.append(character)
-            width += character_width
-        lines.append("".join(current))
+            current_pt += char_w
+        if current:
+            lines.append("".join(current))
     return lines
 
 
@@ -150,8 +152,7 @@ class PdfWriter:
             self._new_page()
 
     def _lines(self, value: Any, width: float, font_size: float) -> list[str]:
-        display_units = max(8, int(width / font_size * 1.9))
-        return _wrap_text(value, display_units)
+        return _wrap_text_by_points(value, font_size, width)
 
     def _draw_lines_at(
         self,
