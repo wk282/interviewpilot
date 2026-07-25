@@ -100,34 +100,41 @@ async def embed_and_index_chunks(
     )
     embedded_at = datetime.now(timezone.utc)
     embedding_queue_wait_ms = 0
-    for offset in range(0, len(chunks), settings.EMBEDDING_BATCH_SIZE):
-        batch = chunks[offset : offset + settings.EMBEDDING_BATCH_SIZE]
-        logger.info(
-            f"Embedding batch started | job_id={job.id} | offset={offset} | "
-            f"batch_size={len(batch)} | total_chunks={len(chunks)}"
-        )
-        async with ai_concurrency_slot(
-            "document_embedding",
-            settings.EMBEDDING_MODEL_NAME,
-        ) as concurrency:
-            response = await client.embeddings.create(
-                model=settings.EMBEDDING_MODEL_NAME,
-                input=[chunk.content for chunk in batch],
-                dimensions=settings.EMBEDDING_DIMENSIONS,
+    try:
+        for offset in range(0, len(chunks), settings.EMBEDDING_BATCH_SIZE):
+            batch = chunks[offset : offset + settings.EMBEDDING_BATCH_SIZE]
+            logger.info(
+                f"Embedding batch started | job_id={job.id} | offset={offset} | "
+                f"batch_size={len(batch)} | total_chunks={len(chunks)}"
             )
-        embedding_queue_wait_ms += concurrency.queue_wait_ms
-        vectors = sorted(response.data, key=lambda item: item.index)
-        if len(vectors) != len(batch):
-            raise ValueError("Embedding API returned an incomplete batch")
-        for chunk, result in zip(batch, vectors):
-            if len(result.embedding) != settings.EMBEDDING_DIMENSIONS:
-                raise ValueError(
-                    f"Embedding dimension mismatch: expected {settings.EMBEDDING_DIMENSIONS}, "
-                    f"got {len(result.embedding)}"
+            async with ai_concurrency_slot(
+                "document_embedding",
+                settings.EMBEDDING_MODEL_NAME,
+            ) as concurrency:
+                response = await client.embeddings.create(
+                    model=settings.EMBEDDING_MODEL_NAME,
+                    input=[chunk.content for chunk in batch],
+                    dimensions=settings.EMBEDDING_DIMENSIONS,
                 )
-            chunk.embedding = result.embedding
-            chunk.embedding_model = settings.EMBEDDING_MODEL_NAME
-            chunk.embedded_at = embedded_at
+            embedding_queue_wait_ms += concurrency.queue_wait_ms
+            vectors = sorted(response.data, key=lambda item: item.index)
+            if len(vectors) != len(batch):
+                raise ValueError("Embedding API returned an incomplete batch")
+            for chunk, result in zip(batch, vectors):
+                if len(result.embedding) != settings.EMBEDDING_DIMENSIONS:
+                    raise ValueError(
+                        f"Embedding dimension mismatch: expected {settings.EMBEDDING_DIMENSIONS}, "
+                        f"got {len(result.embedding)}"
+                    )
+                chunk.embedding = result.embedding
+                chunk.embedding_model = settings.EMBEDDING_MODEL_NAME
+                chunk.embedded_at = embedded_at
+    finally:
+        # Celery executes this coroutine with asyncio.run(). Close HTTPX while
+        # that loop is still alive; otherwise OpenAI's finalizer schedules
+        # AsyncClient.aclose() after loop shutdown and emits noisy
+        # "Event loop is closed" errors.
+        await client.close()
 
     await finish_stage(
         session,
