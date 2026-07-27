@@ -13,7 +13,8 @@ interviewpilot-app:${APP_IMAGE_TAG:-latest}
 ```
 
 只有 `migrate` 声明后端 `build`，其余四个服务直接复用该镜像并通过不同
-`command` 启动。`docker compose build --print` 的默认构建目标因此从 6 个减少为：
+`command` 启动，同时通过 `pull_policy: never` 禁止 Compose 把本地应用镜像误当成
+Docker Hub 的 `library/interviewpilot-app` 拉取。`docker compose build --print` 的默认构建目标因此从 6 个减少为：
 
 ```text
 migrate
@@ -56,6 +57,13 @@ NPM_REGISTRY=https://registry.npmjs.org
 
 ```bash
 docker compose --profile production up -d --build
+```
+
+如果服务器使用的 Compose 版本仍然并行检查本地镜像，可显式拆成顺序执行：
+
+```bash
+docker compose build migrate frontend
+docker compose --profile production up -d --pull never
 ```
 
 只有环境变量变化时不需要构建：

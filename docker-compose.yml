@@ -99,6 +99,9 @@ services:
 
   backend:
     image: *backend-image
+    # This image is produced locally by the migrate build target. Never try to
+    # resolve the private application tag from Docker Hub.
+    pull_policy: never
     env_file:
       - ./backend/.env
     environment:
@@ -130,6 +133,7 @@ services:
 
   celery-worker:
     image: *backend-image
+    pull_policy: never
     env_file:
       - ./backend/.env
     environment:
@@ -157,6 +161,7 @@ services:
 
   retrieval-mcp:
     image: *backend-image
+    pull_policy: never
     env_file:
       - ./backend/.env
     environment:
@@ -181,6 +186,7 @@ services:
 
   report-mcp:
     image: *backend-image
+    pull_policy: never
     env_file:
       - ./backend/.env
     environment:
