@@ -77,6 +77,8 @@ docker compose --profile production up -d --build
 
 本地部署说明见 [docs/LOCAL_DOCKER_COMPOSE.md](docs/LOCAL_DOCKER_COMPOSE.md)，阿里云域名、DNS、安全组与 HTTPS 操作见 [docs/ALIYUN_DOMAIN_DEPLOYMENT.md](docs/ALIYUN_DOMAIN_DEPLOYMENT.md)。
 
+后端迁移、FastAPI、Celery 与 MCP 服务共用单一应用镜像，并通过国内依赖源与 BuildKit Cache Mount 缩短重复构建时间。详见 [docs/DOCKER_BUILD_OPTIMIZATION.md](docs/DOCKER_BUILD_OPTIMIZATION.md)。
+
 ## 基线版本 (Baseline)
 
 评测前的完整产品基线版本已保存于 Git 标签 `baseline-v1`。详见 [docs/BASELINE_V1.md](docs/BASELINE_V1.md) 获取其功能范围与恢复说明。

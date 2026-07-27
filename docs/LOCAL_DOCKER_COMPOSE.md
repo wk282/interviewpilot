@@ -47,6 +47,11 @@ The first build downloads the base images and Python/npm dependencies. Open:
 - FastAPI documentation: http://localhost:8000/docs
 - OpenSearch: http://localhost:9200
 
+FastAPI、Celery、迁移和两个 MCP 服务复用同一个 `interviewpilot-app`
+镜像；Python/NPM/OCR 依赖使用国内镜像和 BuildKit Cache Mount。构建目标、缓存规则及
+阿里云 Docker Hub 加速配置见
+[DOCKER_BUILD_OPTIMIZATION.md](DOCKER_BUILD_OPTIMIZATION.md)。
+
 Follow startup and migration logs with:
 
 ```powershell

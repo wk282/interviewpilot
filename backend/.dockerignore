@@ -3,6 +3,9 @@ __pycache__/
 .env
 .venv/
 data/uploads/
+data/processed/
+data/raw/
+data/mcp-artifacts/
 evaluation/reports/
 logs/
 .pytest_cache/
