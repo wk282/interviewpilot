@@ -6,6 +6,13 @@ x-backend-environment: &backend-environment
   CELERY_BROKER_URL: redis://redis:6379/0
   CELERY_RESULT_BACKEND: redis://redis:6379/1
   OPENSEARCH_URL: http://opensearch:9200
+  MCP_RETRIEVAL_ENABLED: ${MCP_RETRIEVAL_ENABLED:-true}
+  MCP_RETRIEVAL_URL: http://retrieval-mcp:8011/mcp
+  MCP_REPORT_ENABLED: ${MCP_REPORT_ENABLED:-true}
+  MCP_REPORT_URL: http://report-mcp:8012/mcp
+  MCP_CALL_TIMEOUT_SECONDS: ${MCP_CALL_TIMEOUT_SECONDS:-20}
+  MCP_INTERNAL_SECRET: ${MCP_INTERNAL_SECRET:-}
+  MCP_ARTIFACT_STORAGE_ROOT: /app/data/mcp-artifacts
   OCR_WORKER_ENABLED: ${OCR_WORKER_ENABLED:-false}
   CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080}
 
@@ -94,6 +101,7 @@ services:
       - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
     volumes:
       - document-data:/app/data/uploads
+      - mcp-artifacts:/app/data/mcp-artifacts
       - backend-logs:/app/logs
     depends_on:
       migrate:
@@ -140,6 +148,56 @@ services:
         condition: service_healthy
       opensearch:
         condition: service_healthy
+    restart: unless-stopped
+
+  retrieval-mcp:
+    build:
+      context: ./backend
+    env_file:
+      - ./backend/.env
+    environment:
+      <<: *backend-environment
+    command: python -m mcp_servers.retrieval_server
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      opensearch:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import socket; s=socket.create_connection(('127.0.0.1',8011),3); s.close()
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    restart: unless-stopped
+
+  report-mcp:
+    build:
+      context: ./backend
+    env_file:
+      - ./backend/.env
+    environment:
+      <<: *backend-environment
+    command: python -m mcp_servers.report_server
+    volumes:
+      - mcp-artifacts:/app/data/mcp-artifacts
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import socket; s=socket.create_connection(('127.0.0.1',8012),3); s.close()
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
     restart: unless-stopped
 
   ocr-worker:
@@ -209,6 +267,7 @@ volumes:
   opensearch-data:
   document-data:
   backend-logs:
+  mcp-artifacts:
   paddle-models:
   caddy-data:
   caddy-config:

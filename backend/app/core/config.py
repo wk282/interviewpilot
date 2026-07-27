@@ -96,6 +96,18 @@ class Settings(BaseSettings):
     OPENSEARCH_PASSWORD: str | None = None
     OPENSEARCH_INDEX_NAME: str = "interviewpilot-document-chunks"
     OPENSEARCH_TIMEOUT_SECONDS: int = 10
+
+    # MCP tool services. The application remains usable when either service is
+    # disabled or unavailable because every MCP call has an in-process fallback.
+    MCP_RETRIEVAL_ENABLED: bool = False
+    MCP_RETRIEVAL_URL: str = "http://127.0.0.1:8011/mcp"
+    MCP_REPORT_ENABLED: bool = False
+    MCP_REPORT_URL: str = "http://127.0.0.1:8012/mcp"
+    MCP_CALL_TIMEOUT_SECONDS: float = Field(default=20.0, gt=0, le=120)
+    MCP_INTERNAL_SECRET: str | None = None
+    MCP_AUTH_TOKEN_TTL_SECONDS: int = Field(default=60, ge=10, le=600)
+    MCP_ARTIFACT_STORAGE_ROOT: str = "data/mcp-artifacts"
+    MCP_ARTIFACT_MAX_AGE_SECONDS: int = Field(default=3600, ge=60, le=86400)
     
     # 单进程 AI 并发限制，防止瞬时请求过高导致 429 Rate Limit
     MAX_CONCURRENCY: int = Field(default=2, ge=1, le=100)

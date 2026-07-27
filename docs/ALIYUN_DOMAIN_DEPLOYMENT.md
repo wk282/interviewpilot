@@ -48,6 +48,7 @@ CORS_ALLOWED_ORIGINS=https://wktqkeji.site,https://www.wktqkeji.site
 ```
 
 `backend/.env` 继续保存模型 Key、JWT Secret 等后端配置，不要提交这两个 `.env` 文件。
+根目录 `.env` 还应设置独立的 `MCP_INTERNAL_SECRET`。两个 MCP 服务只在 Docker 内部网络提供工具接口，不需要开放 8011/8012 端口。
 
 ## 4. 启动
 
@@ -62,7 +63,7 @@ ss -lntup | grep -E ':80 |:443 '
 ```bash
 docker compose --profile production up -d --build
 docker compose --profile production ps
-docker compose logs --tail=100 gateway frontend backend
+docker compose logs --tail=100 gateway frontend backend retrieval-mcp report-mcp
 ```
 
 `gateway` 的 Caddy 会自动申请证书。DNS 尚未生效、端口未放行或域名未指向本机时，证书申请会失败。

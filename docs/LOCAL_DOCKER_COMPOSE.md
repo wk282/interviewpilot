@@ -8,6 +8,8 @@ This Compose stack runs the complete InterviewPilot application locally:
 - PostgreSQL with pgvector
 - Redis
 - OpenSearch
+- Retrieval MCP Server（Vector + BM25 + RRF）
+- Report MCP Server（PDF 报告渲染）
 - Optional isolated PaddleOCR worker
 
 On the first start of a new PostgreSQL volume, `backend/docker/init.sql`
@@ -28,7 +30,7 @@ Copy-Item .env.compose.example .env
 Copy-Item backend/.env.example backend/.env
 ```
 
-If `backend/.env` already contains working DeepSeek and embedding settings, keep it. Set a long random `JWT_SECRET_KEY`. The root database password should use URL-safe alphanumeric characters because it is embedded in connection URLs.
+If `backend/.env` already contains working DeepSeek and embedding settings, keep it. Set a long random `JWT_SECRET_KEY`, and set a different long random `MCP_INTERNAL_SECRET` in the root `.env`. The root database password should use URL-safe alphanumeric characters because it is embedded in connection URLs.
 
 ## 2. Start the default stack
 
@@ -48,7 +50,7 @@ The first build downloads the base images and Python/npm dependencies. Open:
 Follow startup and migration logs with:
 
 ```powershell
-docker compose logs -f migrate backend celery-worker frontend
+docker compose logs -f migrate backend celery-worker retrieval-mcp report-mcp frontend
 ```
 
 ## 3. Enable scanned-PDF OCR
@@ -100,6 +102,7 @@ Use the actual dump path and database values from the root `.env`. Back up the c
 docker compose ps
 docker compose logs --tail=200 backend
 docker compose logs --tail=200 celery-worker
+docker compose logs --tail=200 retrieval-mcp report-mcp
 docker compose exec postgres pg_isready -U interviewpilot -d interviewpilot
 docker compose exec redis redis-cli ping
 ```

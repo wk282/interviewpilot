@@ -24,6 +24,7 @@ from app.schemas.retrieval import RetrievalSearchRequest
 from app.services.reranker import ZhipuReranker
 from app.services.ai_observability import elapsed_ms
 from app.services.ai_concurrency import ai_concurrency_slot
+from app.services.mcp_clients.retrieval import retrieve_interview_evidence_via_mcp
 
 
 PROMPT_VERSION = "interview-blueprint-v3"
@@ -77,6 +78,81 @@ def parse_json_content(content: str) -> dict:
 
 
 async def collect_evidence(
+    session: AsyncSession,
+    interview: InterviewSession,
+    position: JobPosition,
+    candidate: CandidateProfile,
+    user: AppUser,
+    retrieval_query: str | None = None,
+    observability: dict | None = None,
+) -> list[dict]:
+    """Collect evidence through MCP, falling back to the in-process pipeline.
+
+    The caller supplies authenticated application objects. The LLM never gets
+    to choose a workspace, user, interview or knowledge-base identifier.
+    """
+    if retrieval_query is None:
+        retrieval_query = "\n".join(
+            part
+            for part in (
+                position.title,
+                position.department or "",
+                position.description or "",
+                json.dumps(position.requirements, ensure_ascii=False),
+            )
+            if part
+        )[:1000]
+
+    if settings.MCP_RETRIEVAL_ENABLED:
+        # Do not retain a pool connection while waiting on an MCP network call.
+        await session.commit()
+        started_at = perf_counter()
+        try:
+            evidence, metadata = await retrieve_interview_evidence_via_mcp(
+                interview_id=interview.id,
+                workspace_id=interview.workspace_id,
+                user_id=user.id,
+                query=retrieval_query,
+            )
+            if observability is not None:
+                observability["mcp"] = {
+                    "enabled": True,
+                    "server": "retrieval",
+                    "transport": "streamable_http",
+                    "fallback": False,
+                    "latency_ms": elapsed_ms(started_at),
+                    **metadata,
+                }
+            return evidence
+        except Exception as error:
+            logger.warning(
+                "Retrieval MCP unavailable; using in-process fallback: "
+                f"{type(error).__name__}: {error}"
+            )
+            if observability is not None:
+                observability["mcp"] = {
+                    "enabled": True,
+                    "server": "retrieval",
+                    "transport": "streamable_http",
+                    "fallback": True,
+                    "latency_ms": elapsed_ms(started_at),
+                    "error": f"{type(error).__name__}: {error}"[:500],
+                }
+    elif observability is not None:
+        observability["mcp"] = {"enabled": False, "fallback": False}
+
+    return await collect_evidence_in_process(
+        session,
+        interview,
+        position,
+        candidate,
+        user,
+        retrieval_query=retrieval_query,
+        observability=observability,
+    )
+
+
+async def collect_evidence_in_process(
     session: AsyncSession,
     interview: InterviewSession,
     position: JobPosition,

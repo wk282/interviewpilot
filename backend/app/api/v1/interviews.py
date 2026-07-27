@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user
 from app.core.config import settings
+from app.core.logger import logger
 from app.core.permissions import require_workspace_role
 from app.db.models.document import Document
 from app.db.models.interview import (
@@ -63,7 +64,13 @@ from app.services.interview_agent_graph import (
 from app.services.interview_checkpointing import delete_interview_checkpoints
 from app.services.interview_observability import build_interview_observability
 from app.services.interview_quality_audit import generate_interview_quality_audit
-from app.services.interview_report_pdf import build_interview_report_pdf
+from app.services.interview_report_data import (
+    InterviewReportNotFoundError,
+    InterviewReportNotReadyError,
+    build_pdf_from_report_data,
+    load_interview_report_data,
+)
+from app.services.mcp_clients.report import render_interview_report_via_mcp
 from app.workers.interview_tasks import generate_interview_evaluation, generate_interview_plan
 
 
@@ -1580,65 +1587,50 @@ async def download_interview_evaluation_pdf(
     session: AsyncSession = Depends(get_db_session),
 ) -> Response:
     await require_workspace_role(session, workspace_id, current_user.id, READ_ROLES)
-    row = (
-        await session.execute(
-            select(InterviewSession, InterviewEvaluation, CandidateProfile, JobPosition)
-            .join(
-                InterviewEvaluation,
-                InterviewEvaluation.interview_session_id == InterviewSession.id,
+    pdf: bytes | None = None
+    if settings.MCP_REPORT_ENABLED:
+        await session.commit()
+        try:
+            pdf, metadata = await render_interview_report_via_mcp(
+                interview_id=interview_id,
+                workspace_id=workspace_id,
+                user_id=current_user.id,
             )
-            .join(CandidateProfile, CandidateProfile.id == InterviewSession.candidate_profile_id)
-            .join(JobPosition, JobPosition.id == InterviewSession.job_position_id)
-            .where(
-                InterviewSession.id == interview_id,
-                InterviewSession.workspace_id == workspace_id,
+            logger.info(
+                "Report MCP completed: interview_id={}, artifact_id={}, bytes={}",
+                interview_id,
+                metadata.get("artifact_id"),
+                len(pdf),
             )
+        except Exception as error:
+            logger.warning(
+                "Report MCP unavailable; using in-process fallback: {}: {}",
+                type(error).__name__,
+                error,
+            )
+
+    try:
+        report_data = await load_interview_report_data(
+            session,
+            workspace_id=workspace_id,
+            interview_id=interview_id,
         )
-    ).one_or_none()
-    if row is None:
+    except InterviewReportNotFoundError as error:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="评估报告不存在",
-        )
-    interview, evaluation, candidate, position = row
-    if evaluation.status != "COMPLETED":
+            detail=str(error),
+        ) from error
+    except InterviewReportNotReadyError as error:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="评估报告完成后才能下载",
-        )
-    critiques = list(
-        (
-            await session.scalars(
-                select(InterviewTurnCritique)
-                .where(InterviewTurnCritique.interview_session_id == interview.id)
-                .order_by(InterviewTurnCritique.created_at)
-            )
-        ).all()
+            detail=str(error),
+        ) from error
+
+    if pdf is None:
+        pdf = build_pdf_from_report_data(report_data)
+    filename = quote(
+        f"{report_data.candidate.full_name}-{report_data.position.title}-面试评估报告.pdf"
     )
-    revisions = list(
-        (
-            await session.scalars(
-                select(InterviewPlanRevision)
-                .where(InterviewPlanRevision.interview_session_id == interview.id)
-                .order_by(InterviewPlanRevision.version)
-            )
-        ).all()
-    )
-    quality_audit = await session.scalar(
-        select(InterviewQualityAudit).where(
-            InterviewQualityAudit.interview_session_id == interview.id
-        )
-    )
-    pdf = build_interview_report_pdf(
-        evaluation=evaluation,
-        candidate_name=candidate.full_name,
-        job_title=position.title,
-        completed_at=interview.completed_at,
-        critiques=critiques,
-        revisions=revisions,
-        quality_audit=quality_audit,
-    )
-    filename = quote(f"{candidate.full_name}-{position.title}-面试评估报告.pdf")
     return Response(
         content=pdf,
         media_type="application/pdf",

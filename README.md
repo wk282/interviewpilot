@@ -8,6 +8,7 @@ InterviewPilot 是一个基于 **Agentic CRAG（纠错检索增强生成）** �
 ResearchPilot/
 |- backend/                       FastAPI、Celery、AI 服务与数据库迁移
 |  |- app/                        后端应用主包
+|  |- mcp_servers/                混合检索与 PDF 报告 MCP Server
 |  |- alembic/                    数据库迁移脚本
 |  |- data/                       后端数据集与运行文档
 |  |- evaluation/                 离线评估语料、标注、指标与报告
@@ -93,6 +94,10 @@ docker compose --profile production up -d --build
 Planner、Answer Critic、Plan Reviser、Interviewer 和 Final Evaluator 共享同一个可序列化的 `InterviewState` 状态，并通过 LangGraph 路由提供 `PLAN`（规划）、`TURN`（轮次）和 `EVALUATE`（评估）入口。计划修订保留了前后对比快照、字段级 Diff 和能力项题目预算。详见 [docs/MULTI_AGENT_ARCHITECTURE.md](docs/MULTI_AGENT_ARCHITECTURE.md)。
 
 运行图采用 PostgreSQL Checkpoint 与 `wait_for_answer` 中断机制。候选人提交回答后唤醒暂停的线程并执行 `ainvoke(None)`；即使网络中断，再次读取时也能恢复已生成的题目，无需重复调用大模型。详见 [docs/LANGGRAPH_CHECKPOINTING.md](docs/LANGGRAPH_CHECKPOINTING.md)。
+
+## MCP 工具协议 (MCP Tool Services)
+
+混合检索能力已封装为独立的 Streamable HTTP MCP Server，由 Planner/CRAG 的确定性调用链获取结构化证据；PDF 报告渲染由独立 Report MCP Server 提供，并只在最终评估完成后由报告接口调用。两条链路都包含短期签名上下文、工作空间二次鉴权、调用超时、观测记录与原进程内实现降级。详见 [docs/MCP_TOOL_SERVICES.md](docs/MCP_TOOL_SERVICES.md)。
 
 ## AI 可观测性 (AI Observability)
 
